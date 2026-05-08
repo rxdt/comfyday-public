@@ -32,17 +32,9 @@ static FLUX image
 
 ## 📸 Screenshot
 
-This public repo intentionally excludes private generated model images. In the private deploy repo, this section shows a real app screenshot.
+![Comfyday app screenshot](docs/app-screenshot.png)
 
-```text
-┌─────────────────────────────────────┐
-│              outfit image           │
-│                                     │
-│         Current weather in 94110     │
-│       53° · 0% rain · night · windy  │
-│       Low 50s; use a real layer      │
-└─────────────────────────────────────┘
-```
+This public repo excludes the full private generated outfit library. The screenshot is included to show the product experience.
 
 ## 🧠 Architecture
 
