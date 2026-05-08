@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comfyday</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}" />
+  </head>
+  <body>
+    <main class="page">
+      <div class="content">
+        <div class="scene-stage">
+          <img
+            id="base-photo"
+            class="base-photo"
+            alt="Base model photo"
+            src=""
+          />
+          <div class="missing-base" id="missing-base">
+            Base image missing under <code>static/assets/base/</code>.
+          </div>
+          <div class="scene-layers" id="scene-layers"></div>
+        </div>
+
+        <section class="weather-block">
+          <p class="weather-title">
+            Current weather in <span id="location-label">San Francisco</span>
+          </p>
+          <p class="weather-info">
+            <span id="temperature">--</span>&deg;
+            <span class="separator">·</span>
+            <span id="rain-chance">--</span>% rain
+            <span class="separator">·</span>
+            <span id="weather-kind">--</span>
+            <span class="separator">·</span>
+            <span id="description">loading weather</span>
+            <span id="wind-fragment"></span>
+          </p>
+          <p class="weather-outfit-note" id="outfit-note"></p>
+          <p class="status-line" id="status-line">Getting current weather...</p>
+          <p class="weather-last-updated">
+            Last updated: <span id="last-updated">--</span>
+          </p>
+        </section>
+
+        <form id="time-form" class="weather-controls">
+          <div class="weather-form-row">
+            <label class="time-prompt" for="hours-ahead">Check the weather in</label>
+            <input
+              id="hours-ahead"
+              name="hours_ahead"
+              type="number"
+              min="0"
+              max="{{ max_forecast_hours }}"
+              step="1"
+              value="0"
+              inputmode="numeric"
+            />
+            <span class="time-prompt">hours</span>
+            <button type="submit">Go</button>
+          </div>
+          <div class="weather-form-row">
+            <label class="time-prompt" for="location-query">ZIP or place</label>
+            <input
+              id="location-query"
+              name="query"
+              type="text"
+              maxlength="120"
+              value="94110"
+              placeholder="94110"
+              autocomplete="postal-code"
+            />
+            <button type="submit">Go</button>
+          </div>
+        </form>
+      </div>
+    </main>
+
+    <script>
+      window.__INITIAL_SCENE__ = {{ initial_scene|safe }};
+      window.__MAX_FORECAST_HOURS__ = {{ max_forecast_hours }};
+    </script>
+    <script type="module" src="{{ url_for('static', path='app.js') }}"></script>
+  </body>
+</html>
