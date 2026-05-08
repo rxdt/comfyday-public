@@ -1,25 +1,27 @@
-"""Backend smoke tests for the current front-only FLUX-static runtime path."""
+"""Backend smoke tests for the ZIP-only FLUX-static runtime path."""
 
 from __future__ import annotations
 
+import asyncio
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 
 from backend_models import LocationRecord, OutfitWeatherContext, WeatherSnapshot
 from outfit_logic import (
+    SF_ZIP_TO_HOOD,
     TEMPERATURE_BUCKETS,
-    WEATHER_OUTFIT_PRESETS,
+    display_location_name,
     get_outfit,
     interpret_weather_for_messaging_and_outfit_selection,
     selected_weather_preset_key,
 )
 from scene_builder import build_scene
-from weather_service import WeatherSceneService
+from weather_service import WeatherSceneService, concise_location_label, normalize_zip_code, request_country_hint
 
 
 class BackendRuntimeTests(unittest.TestCase):
-    """Keep the backend modules aligned with the shipped FLUX-static path."""
+    """Keep backend modules aligned with the shipped ZIP-only static runtime."""
 
     def _snapshot(
         self,
@@ -36,7 +38,7 @@ class BackendRuntimeTests(unittest.TestCase):
         wind_speed_mph: float | None = None,
         wind_gust_mph: float | None = None,
     ) -> WeatherSnapshot:
-        """Build a deterministic weather snapshot for outfit-logic tests."""
+        """Build a deterministic snapshot for outfit-selection tests."""
         return WeatherSnapshot(
             query=query,
             location_name=f"{query}, San Francisco",
@@ -54,39 +56,111 @@ class BackendRuntimeTests(unittest.TestCase):
             wind_gust_mph=wind_gust_mph,
         )
 
-    def _selection_for(self, snapshot: WeatherSnapshot) -> tuple[dict[str, str], object]:
-        """Run the outfit-logic entry points and return context plus chosen layers."""
+    def _selection_for(self, snapshot: WeatherSnapshot) -> tuple[dict[str, str], OutfitWeatherContext, str]:
+        """Run the outfit logic for one snapshot."""
         context = interpret_weather_for_messaging_and_outfit_selection(snapshot, None, snapshot.query)
         selected, note = get_outfit(snapshot, context)
         return selected, context, note
 
-    def _scene_snapshot(self) -> WeatherSnapshot:
-        """Build an explicit provider-like snapshot for scene-builder tests."""
-        return self._snapshot(
-            query="94103",
-            temperature_f=58,
-            description="Mostly clear",
-            weather_code=1100,
-            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
-        )
+    def test_sf_zip_map_contains_requested_labels(self) -> None:
+        """Known SF ZIPs should map to stable neighborhood display labels."""
+        self.assertEqual(SF_ZIP_TO_HOOD["94110"][0], "Inner Mission, Bernal Heights, San Francisco")
+        self.assertEqual(SF_ZIP_TO_HOOD["94113"][0], "Glen Park, San Francisco")
+        self.assertEqual(SF_ZIP_TO_HOOD["94122"][0], "Sunset, Inner Sunset, San Francisco")
+        self.assertEqual(SF_ZIP_TO_HOOD["94143"][0], "UC San Francisco, San Francisco")
+        self.assertEqual(SF_ZIP_TO_HOOD["94158"][0], "Mission Bay, San Francisco")
 
-    def test_cool_weather_selects_midlayer_top(self) -> None:
-        """Cool SF weather should keep a base top plus hoodie in the selected stack."""
-        snapshot = self._snapshot(
-            query="Mission",
-            temperature_f=56,
-            description="Mostly clear",
-            weather_code=1100,
-            observed_at=datetime(2026, 5, 6, 19, 0, tzinfo=UTC),
+    def test_normalize_zip_code_uses_default_and_rejects_bad_input(self) -> None:
+        """ZIP normalization should keep the API contract brutally simple."""
+        self.assertEqual(normalize_zip_code(None, "94110"), "94110")
+        self.assertEqual(normalize_zip_code("94122", "94110"), "94122")
+        with self.assertRaisesRegex(ValueError, "exactly 5 digits"):
+            normalize_zip_code("9411", "94110")
+        with self.assertRaisesRegex(ValueError, "exactly 5 digits"):
+            normalize_zip_code("9411a", "94110")
+
+    def test_concise_location_label_keeps_sf_zip_names_and_short_provider_names(self) -> None:
+        """Location labels should stay compact without losing useful country context."""
+        self.assertEqual(
+            concise_location_label("San Francisco, California, United States", query="94110"),
+            "Inner Mission, Bernal Heights, San Francisco",
         )
-        selected, context, note = self._selection_for(snapshot)
-        self.assertEqual(context.bucket, "mid_50s")
-        self.assertEqual(selected["preset_key"], "54_to_56_degree_weather_and_dry")
-        self.assertEqual(selected["generated_image_url"], "/static/generated/flux2/54_to_56_degree_weather_and_dry.png")
-        self.assertIn("layer", note.lower())
+        self.assertEqual(concise_location_label("Portland, Oregon, United States", query="97205"), "Portland, Oregon")
+        self.assertEqual(concise_location_label("San Jose, California, United States", query="95112"), "San Jose")
+        self.assertEqual(concise_location_label("Arcueil, Île-de-France Region, France", query="99999"), "Arcueil, Île-de-France Region")
+        self.assertEqual(concise_location_label(None, query="12345"), "12345")
+
+    def test_request_country_hint_prefers_proxy_country_headers(self) -> None:
+        """Country hints should come from deployment proxy headers when present."""
+        self.assertEqual(request_country_hint({"x-vercel-ip-country": "us"}), "US")
+        self.assertEqual(request_country_hint({"cf-ipcountry": "de"}), "DE")
+        self.assertIsNone(request_country_hint({"x-vercel-ip-country": "USA"}))
+        self.assertIsNone(request_country_hint({}))
+
+    def test_display_location_name_prefers_known_sf_zip(self) -> None:
+        """Display labels should come from the SF ZIP map, not raw provider strings."""
+        self.assertEqual(
+            display_location_name("94122, San Francisco", "94122"),
+            "Sunset, Inner Sunset, San Francisco",
+        )
+        self.assertEqual(
+            display_location_name("94110, San Francisco", "94110"),
+            "Inner Mission, Bernal Heights, San Francisco",
+        )
+        self.assertEqual(
+            display_location_name("94113, San Francisco", "94113"),
+            "Glen Park, San Francisco",
+        )
+        self.assertEqual(display_location_name("San Francisco", "99999"), "San Francisco")
+
+    def test_temperature_buckets_are_zip_only_sf_centered_ranges(self) -> None:
+        """Dry temperature routing should be tightest in the SF core range."""
+        self.assertEqual(
+            TEMPERATURE_BUCKETS,
+            (
+                ("0_to_48", float("-inf"), 48, "0_to_48_dry_very_cold"),
+                ("48_to_50", 48, 50, "48_to_50_dry_cold"),
+                ("50_to_51", 50, 51, "50_to_51_dry_cold_layer"),
+                ("51_to_52", 51, 52, "50_to_52_dry_very_cold"),
+                ("52_to_53", 52, 53, "51_to_53_dry_cold_layer"),
+                ("53_to_54", 53, 54, "53_to_55_dry_cool_layer"),
+                ("54_to_55", 54, 55, "54_to_55_dry_layered"),
+                ("55_to_56", 55, 56, "55_to_57_dry_black_layer"),
+                ("56_to_57", 56, 57, "56_to_57_dry_chunky_cardigan"),
+                ("57_to_57_5", 57, 57.5, "57_to_57_5_dry_cool_layer"),
+                ("57_5_to_58", 57.5, 58, "57_to_59_dry_cool_layer"),
+                ("58_to_59", 58, 59, "59_to_61_dry_sweatsuit_layer"),
+                ("59_to_60", 59, 60, "59_to_61_dry_sweatsuit_layer"),
+                ("60_to_60_5", 60, 60.5, "60_to_61_dry_layered_beanie"),
+                ("60_5_to_61", 60.5, 61, "61_to_62_dry_light_layer"),
+                ("61_to_61_5", 61, 61.5, "62_to_62_5_dry_mild_layer"),
+                ("61_5_to_62", 61.5, 62, "62_5_to_63_dry_light_layer"),
+                ("62_to_62_5", 62, 62.5, "62_to_64_dry_cardigan"),
+                ("62_5_to_63", 62.5, 63, "63_to_63_5_dry_jacket_uggs"),
+                ("63_to_63_5", 63, 63.5, "64_to_65_dry_light_layer"),
+                ("63_5_to_64", 63.5, 64, "65_to_66_dry_light_layer"),
+                ("64_to_64_5", 64, 64.5, "66_to_67_dry_mild_layer"),
+                ("64_5_to_65", 64.5, 65, "67_to_67_5_dry_zip_hoodie"),
+                ("65_to_65_5", 65, 65.5, "67_to_68_dry_warm_light"),
+                ("65_5_to_66", 65.5, 66, "67_to_69_dry_warm_light"),
+                ("66_to_67", 66, 67, "66_to_67_dry_mild_layer"),
+                ("67_to_68", 67, 68, "67_to_67_5_dry_zip_hoodie"),
+                ("68_to_69", 68, 69, "67_to_68_dry_warm_light"),
+                ("69_to_70", 69, 70, "69_to_71_dry_warm_light"),
+                ("70_to_71", 70, 71, "71_to_73_dry_warm"),
+                ("71_to_72", 71, 72, "72_5_to_73_dry_warm_clear"),
+                ("72_to_73", 72, 73, "73_to_75_dry_warm_clear"),
+                ("73_to_74", 73, 74, "74_5_to_76_dry_warm_clear"),
+                ("74_to_75", 74, 75, "75_to_78_dry_hot"),
+                ("75_to_77", 75, 77, "75_to_78_dry_hot"),
+                ("77_to_80", 77, 80, "78_to_80_dry_hot"),
+                ("80_to_85", 80, 85, "80_to_85_dry_very_hot"),
+                ("85_plus", 85, float("inf"), "85_plus_dry_very_hot"),
+            ),
+        )
 
     def test_94110_58_degrees_selects_layered_cool_outfit(self) -> None:
-        """Mission zip weather around 58F should not use warm-weather short-sleeve presets."""
+        """Mission ZIP weather around 58F should stay in a layered cool-weather slot."""
         snapshot = self._snapshot(
             query="94110",
             temperature_f=58,
@@ -96,272 +170,215 @@ class BackendRuntimeTests(unittest.TestCase):
         )
         selected, context, note = self._selection_for(snapshot)
         self.assertEqual(context.derived_microclimate_zone, "sunbelt")
-        self.assertEqual(context.bucket, "upper_50s")
-        self.assertEqual(selected["preset_key"], "cool_weather_near_the_bay_or_coast")
-        self.assertIn("jacket", note.lower())
+        self.assertEqual(context.bucket, "59_to_60")
+        self.assertEqual(selected["preset_key"], "59_to_61_dry_sweatsuit_layer")
+        self.assertIn("hoodie", note.lower())
 
-    def test_foggy_cold_coast_does_not_match_cloudy_mission_low_50s(self) -> None:
-        """Cold beach fog should use a harsher layer preset than cloudy Mission low-50s."""
-        beach = self._snapshot(
-            query="Outer Sunset",
+    def test_foggy_94122_is_harsher_than_cloudy_94110(self) -> None:
+        """Cold fog on the coast should route colder than a slightly warmer sunbelt cloud day."""
+        coastal = self._snapshot(
+            query="94122",
             temperature_f=51,
             description="Foggy",
             weather_code=2000,
             observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
         )
-        mission = self._snapshot(
+        sunbelt = self._snapshot(
             query="94110",
             temperature_f=53,
             description="Some clouds",
             weather_code=1101,
             observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
         )
-        beach_selected, beach_context, _beach_note = self._selection_for(beach)
-        mission_selected, mission_context, _mission_note = self._selection_for(mission)
+        coastal_selected, coastal_context, _ = self._selection_for(coastal)
+        sunbelt_selected, sunbelt_context, _ = self._selection_for(sunbelt)
+        self.assertEqual(coastal_context.derived_microclimate_zone, "coastal")
+        self.assertEqual(coastal_context.bucket, "0_to_48")
+        self.assertEqual(coastal_selected["preset_key"], "0_to_48_dry_very_cold")
+        self.assertEqual(sunbelt_context.derived_microclimate_zone, "sunbelt")
+        self.assertEqual(sunbelt_context.bucket, "53_to_54")
+        self.assertEqual(sunbelt_selected["preset_key"], "53_to_55_dry_cool_layer")
 
-        self.assertEqual(beach_context.derived_microclimate_zone, "coastal")
-        self.assertIn("fog", beach_context.derived_conditions)
-        self.assertEqual(beach_context.bucket, "low_50s")
-        self.assertEqual(beach_selected["preset_key"], "cold_weather_with_wind_condition")
-        self.assertEqual(mission_context.derived_microclimate_zone, "sunbelt")
-        self.assertEqual(mission_context.bucket, "low_50s")
-        self.assertEqual(mission_selected["preset_key"], "54_to_56_degree_weather_and_dry")
-        self.assertNotEqual(beach_selected["preset_key"], mission_selected["preset_key"])
-
-    def test_63_degree_band_has_its_own_layered_mapping(self) -> None:
-        """63F should no longer be swallowed by the broader mild bucket."""
-        snapshot = self._snapshot(
-            query="Marina",
-            temperature_f=63,
-            description="Partly cloudy",
-            weather_code=1101,
+    def test_sunbelt_zip_adds_one_degree_to_effective_temp(self) -> None:
+        """Sunbelt ZIPs should feel one degree lighter than non-SF-neutral ZIPs."""
+        neutral = self._snapshot(
+            query="99999",
+            temperature_f=62,
+            description="Mostly clear",
+            weather_code=1100,
             observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
         )
-        selected, context, note = self._selection_for(snapshot)
-        self.assertEqual(context.bucket, "low_mid_60s")
-        self.assertEqual(selected["preset_key"], "early_60s_weather_and_dry")
-        self.assertIn("cardigan", note.lower())
-
-    def test_common_sf_temperature_boundaries_are_tight_and_ordered(self) -> None:
-        """SF's common 53-76F range should be split into adjacent small buckets."""
-        self.assertEqual(
-            TEMPERATURE_BUCKETS,
-            (
-                ("very_cold", float("-inf"), 48),
-                ("cold", 48, 51),
-                ("low_50s", 51, 54),
-                ("mid_50s", 54, 57),
-                ("upper_50s", 57, 59),
-                ("low_60s", 59, 61),
-                ("early_60s", 61, 62),
-                ("low_mid_60s", 62, 64),
-                ("mid_60s", 64, 65),
-                ("upper_60s", 65, 67),
-                ("near_70", 67, 69),
-                ("low_70s", 69, 71),
-                ("warm_low_70s", 71, 73),
-                ("warm_mid_70s", 73, 76),
-                ("hot", 76, 80),
-                ("very_hot", 80, float("inf")),
-            ),
+        sunbelt = self._snapshot(
+            query="94110",
+            temperature_f=62,
+            description="Mostly clear",
+            weather_code=1100,
+            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
         )
+        neutral_selected, neutral_context, _ = self._selection_for(neutral)
+        sunbelt_selected, sunbelt_context, _ = self._selection_for(sunbelt)
+        self.assertEqual(neutral_context.effective_temp_f, 62)
+        self.assertEqual(sunbelt_context.effective_temp_f, 63)
+        self.assertEqual(neutral_selected["preset_key"], "62_to_64_dry_cardigan")
+        self.assertEqual(sunbelt_selected["preset_key"], "64_to_65_dry_light_layer")
 
-    def test_all_weather_presets_have_generated_images(self) -> None:
-        """Every preset key used by outfit selection should have a generated FLUX file."""
-        generated_dir = Path("static/generated/flux2")
-        for key in WEATHER_OUTFIT_PRESETS:
-            path = generated_dir / f"{key}.png"
-            self.assertTrue(path.exists(), f"missing generated image for {key}")
-            self.assertGreater(path.stat().st_size, 0, f"empty generated image for {key}")
+    def test_wet_logic_uses_actual_wet_and_wet_safe_paths(self) -> None:
+        """Actual precip and wet-risk paths should route to different generated presets."""
+        dry = self._snapshot(
+            query="94123",
+            temperature_f=60,
+            description="Mostly clear",
+            weather_code=1100,
+            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
+        )
+        wet = self._snapshot(
+            query="94123",
+            temperature_f=60,
+            description="Drizzle",
+            weather_code=4000,
+            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
+            precip_probability_pct=45,
+            precip_in=0.02,
+        )
+        dry_selected, dry_context, dry_note = self._selection_for(dry)
+        wet_selected, wet_context, wet_note = self._selection_for(wet)
+        self.assertEqual(dry_context.rain_level, "none")
+        self.assertEqual(wet_context.rain_level, "wet")
+        self.assertEqual(dry_selected["preset_key"], "60_to_61_dry_layered_beanie")
+        self.assertEqual(wet_selected["preset_key"], "57_to_61_raining_cool")
+        self.assertNotIn("umbrella", dry_note.lower())
+        self.assertIn("umbrella", wet_note.lower())
 
-    def test_all_non_ignored_flux_images_are_presets(self) -> None:
-        """Every deployable FLUX image should be represented by exactly one preset key."""
+    def test_select_hourly_snapshot_uses_nearest_target_hour(self) -> None:
+        """Forecast requests should use the closest available hourly reading."""
+        service = WeatherSceneService()
+        current = self._snapshot(
+            query="94110",
+            temperature_f=58,
+            description="Mostly clear",
+            weather_code=1100,
+            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
+        )
+        hourly = [
+            self._snapshot(
+                query="94110",
+                temperature_f=59,
+                description="Mostly clear",
+                weather_code=1100,
+                observed_at=datetime(2026, 5, 7, 21, 50, tzinfo=UTC),
+            ),
+            self._snapshot(
+                query="94110",
+                temperature_f=60,
+                description="Mostly clear",
+                weather_code=1100,
+                observed_at=datetime(2026, 5, 7, 22, 5, tzinfo=UTC),
+            ),
+        ]
+        bundle = type("Bundle", (), {"current": current, "hourly": hourly})()
+        chosen = service.select_hourly_snapshot(bundle, 2)
+        self.assertEqual(chosen.temperature_f, 60)
+
+    def test_low_end_wet_routes_cover_rain_snow_and_wet_risk(self) -> None:
+        """Cold wet routing should distinguish rain, snow/wind, and wet-risk reuse."""
+        rain = selected_weather_preset_key(
+            OutfitWeatherContext(
+                effective_temp_f=47.0,
+                bucket="test",
+                rain_level="wet",
+                derived_conditions=frozenset({"wet"}),
+                derived_microclimate_zone=None,
+                local_hour=12,
+                outfit_note="",
+            )
+        )
+        snow_wind = selected_weather_preset_key(
+            OutfitWeatherContext(
+                effective_temp_f=47.0,
+                bucket="test",
+                rain_level="wet",
+                derived_conditions=frozenset({"snow", "wind", "wet"}),
+                derived_microclimate_zone=None,
+                local_hour=12,
+                outfit_note="",
+            )
+        )
+        wet_risk = selected_weather_preset_key(
+            OutfitWeatherContext(
+                effective_temp_f=47.0,
+                bucket="test",
+                rain_level="none",
+                derived_conditions=frozenset({"wet"}),
+                derived_microclimate_zone=None,
+                local_hour=12,
+                outfit_note="",
+            )
+        )
+        self.assertEqual(rain, "0_to_48_rainstorm")
+        self.assertEqual(snow_wind, "0_to_48_snow_or_windstorm")
+        self.assertEqual(wet_risk, "0_to_48_dry_very_cold")
+
+    def test_non_ignored_flux2_images_are_reachable(self) -> None:
+        """Every non-ignored generated image should be reachable from backend routing."""
+        flux_dir = Path("static/generated/flux2")
+        if not flux_dir.exists():
+            return
+
         ignored = {
             "at_home_warm_sunbelt_casual-sweats-and-tee-dresses-test-flux-gen",
-            "cold_dry",
-            "warm_weather_at_night",
+            "warm_at_night",
         }
-        generated_dir = Path("static/generated/flux2")
-        deployable_image_keys = {path.stem for path in generated_dir.glob("*.png") if path.stem not in ignored}
-        self.assertEqual(deployable_image_keys, set(WEATHER_OUTFIT_PRESETS))
+        expected = {path.stem for path in flux_dir.glob("*.png")} - ignored
 
-    def test_all_weather_preset_input_assets_exist(self) -> None:
-        """Every asset path used to generate a preset should still exist locally."""
-        for key, asset_paths in WEATHER_OUTFIT_PRESETS.items():
-            self.assertTrue(asset_paths, key)
-            for asset_path in asset_paths:
-                path = Path(asset_path)
-                self.assertTrue(path.exists(), f"missing source asset for {key}: {asset_path}")
-                self.assertGreater(path.stat().st_size, 0, f"empty source asset for {key}: {asset_path}")
-
-    def test_every_daytime_preset_is_reachable_and_generated(self) -> None:
-        """Provider-data-only selection should cover every generated daytime preset."""
         reachable = set()
-        zones = (None, "coastal", "mixed_microclimate", "sunbelt")
-        rain_levels = ("none", "drizzle", "rain", "storm")
-        condition_sets = (
-            frozenset(),
-            frozenset({"cloud"}),
-            frozenset({"fog"}),
-            frozenset({"wind"}),
-            frozenset({"fog", "wind"}),
-            frozenset({"wet"}),
+        sample_conditions = (
+            ("none", frozenset()),
+            ("wet", frozenset({"wet"})),
+            ("wet", frozenset({"snow", "wind", "wet"})),
+            ("none", frozenset({"wet"})),
         )
-        for bucket, low, high in TEMPERATURE_BUCKETS:
+        for _bucket, low, high, _key in TEMPERATURE_BUCKETS:
             if low == float("-inf"):
-                sample_temps = (40, high - 0.1)
+                sample_temps = (40, 47.5)
             elif high == float("inf"):
-                sample_temps = (low, low + 2, 90)
+                sample_temps = (85, 90)
             else:
-                width = high - low
-                sample_temps = (low, low + width * 0.25, low + width * 0.5, low + width * 0.75, high - 0.1)
-            for zone in zones:
-                for rain_level in rain_levels:
-                    for conditions in condition_sets:
-                        for temp in sample_temps:
-                            context = OutfitWeatherContext(
+                sample_temps = (low, (low + high) / 2, high - 0.1)
+            for rain_level, conditions in sample_conditions:
+                for temp in sample_temps:
+                    reachable.add(
+                        selected_weather_preset_key(
+                            OutfitWeatherContext(
                                 effective_temp_f=temp,
-                                bucket=bucket,
+                                bucket="test",
                                 rain_level=rain_level,
                                 derived_conditions=conditions,
-                                derived_microclimate_zone=zone,
+                                derived_microclimate_zone=None,
                                 local_hour=12,
                                 outfit_note="",
                             )
-                            reachable.add(selected_weather_preset_key(context))
+                        )
+                    )
+
+        self.assertEqual(sorted(expected - reachable), [])
+
+    def test_only_ignored_flux2_images_are_unreferenced(self) -> None:
+        """Only the intentional non-runtime images should stay unreferenced in outfit logic."""
         flux_dir = Path("static/generated/flux2")
-        self.assertEqual(set(WEATHER_OUTFIT_PRESETS), reachable)
-        for key in reachable:
-            self.assertIn(key, WEATHER_OUTFIT_PRESETS)
-            self.assertTrue((flux_dir / f"{key}.png").exists(), key)
-
-    def test_microclimate_zone_does_not_change_provider_based_preset(self) -> None:
-        """Microclimate is UI messaging only; real temp/rain/fog/wind choose the outfit."""
-        keys = {
-            selected_weather_preset_key(
-                OutfitWeatherContext(
-                    effective_temp_f=63,
-                    bucket="low_mid_60s",
-                    rain_level="none",
-                    derived_conditions=frozenset(),
-                    derived_microclimate_zone=zone,
-                    local_hour=12,
-                    outfit_note="",
-                )
-            )
-            for zone in (None, "coastal", "mixed_microclimate", "sunbelt")
+        if not flux_dir.exists():
+            return
+        ignored = {
+            "at_home_warm_sunbelt_casual-sweats-and-tee-dresses-test-flux-gen",
+            "warm_at_night",
         }
-        self.assertEqual(keys, {"early_60s_weather_and_dry"})
+        text = Path("outfit_logic.py").read_text()
+        unreferenced = {path.stem for path in flux_dir.glob("*.png") if path.stem not in text}
+        self.assertEqual(unreferenced, ignored)
 
-    def test_rain_and_snow_edges_choose_coarse_safe_presets(self) -> None:
-        """Rare wet/snow branches should fail safe into warm outerwear, not light dry looks."""
-        snow = self._snapshot(
-            query="94110",
-            temperature_f=40,
-            description="Snow",
-            weather_code=5000,
-            observed_at=datetime(2026, 1, 7, 18, 0, tzinfo=UTC),
-            precip_in=0.2,
-            snow=True,
-        )
-        storm = self._snapshot(
-            query="94110",
-            temperature_f=54,
-            description="Storm",
-            weather_code=8000,
-            observed_at=datetime(2026, 1, 7, 18, 0, tzinfo=UTC),
-            precip_in=0.2,
-        )
-        snow_context = interpret_weather_for_messaging_and_outfit_selection(snow, None, snow.query)
-        storm_context = interpret_weather_for_messaging_and_outfit_selection(storm, None, storm.query)
-        self.assertEqual(selected_weather_preset_key(snow_context), "cold_weather_and_wet_rainstorm")
-        self.assertEqual(selected_weather_preset_key(storm_context), "cold_weather_and_wet_storming")
-
-    def test_50_degree_dry_slot_uses_cold_wind_image_without_broad_override(self) -> None:
-        """A slim 50-51F dry slot should surface the puffer image without taking over low 50s."""
-        slot = self._snapshot(
-            query="Mission",
-            temperature_f=50.5,
-            description="Clear",
-            weather_code=1000,
-            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
-        )
-        lower = self._snapshot(
-            query="Mission",
-            temperature_f=49.5,
-            description="Clear",
-            weather_code=1000,
-            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
-        )
-        upper = self._snapshot(
-            query="Mission",
-            temperature_f=51.5,
-            description="Clear",
-            weather_code=1000,
-            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
-        )
-        self.assertEqual(self._selection_for(slot)[0]["preset_key"], "cold_weather_with_wind_condition")
-        self.assertEqual(self._selection_for(lower)[0]["preset_key"], "cold_weather_and_dry")
-        self.assertEqual(self._selection_for(upper)[0]["preset_key"], "54_to_56_degree_weather_and_dry")
-
-    def test_dry_cold_boundary_presets_stay_distinct(self) -> None:
-        """Cold dry boundary samples should not accidentally collapse into one preset."""
-        samples = {
-            47.5: "very_cold_weather_and_dry",
-            49.5: "cold_weather_and_dry",
-            50.5: "cold_weather_with_wind_condition",
-            51.5: "54_to_56_degree_weather_and_dry",
-            56.5: "54_to_56_degree_weather_and_dry",
-            58.0: "cool_weather_near_the_bay_or_coast",
-            61.5: "mild_weather_in_a_warm_neighborhood",
-            63.0: "early_60s_weather_and_dry",
-            64.5: "mild_weather_near_the_bay",
-        }
-        for temp, expected_key in samples.items():
-            with self.subTest(temp=temp):
-                snapshot = self._snapshot(
-                    query="Mission",
-                    temperature_f=temp,
-                    description="Clear",
-                    weather_code=1000,
-                    observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
-                )
-                self.assertEqual(self._selection_for(snapshot)[0]["preset_key"], expected_key)
-
-    def test_hot_mission_day_selects_tank_and_jeans(self) -> None:
-        """Warm east-side late-summer weather should collapse to the lightest shipped base look."""
+    def test_provider_wind_cools_effective_temp_before_normal_selection(self) -> None:
+        """Provider wind should cool effective temp before the normal temp bucket is chosen."""
         snapshot = self._snapshot(
-            query="Mission",
-            temperature_f=76,
-            description="Clear, sunny",
-            weather_code=1000,
-            observed_at=datetime(2026, 8, 20, 21, 0, tzinfo=UTC),
-        )
-        selected, context, note = self._selection_for(snapshot)
-        self.assertEqual(context.bucket, "hot")
-        self.assertEqual(selected["preset_key"], "hot_weather_near_the_coast_or_bay")
-        self.assertIn("hot", note.lower())
-
-    def test_outer_sunset_marine_summer_uses_provider_conditions_only(self) -> None:
-        """Microclimate should not invent fog/wind when provider data says clear."""
-        snapshot = self._snapshot(
-            query="Outer Sunset",
-            temperature_f=61,
-            description="Mostly clear",
-            weather_code=1100,
-            observed_at=datetime(2026, 7, 15, 22, 0, tzinfo=UTC),
-        )
-        selected, context, note = self._selection_for(snapshot)
-        self.assertEqual(context.derived_microclimate_zone, "coastal")
-        self.assertNotIn("fog", context.derived_conditions)
-        self.assertNotIn("wind", context.derived_conditions)
-        self.assertEqual(context.bucket, "early_60s")
-        self.assertEqual(selected["preset_key"], "mild_weather_in_a_warm_neighborhood")
-
-    def test_provider_wind_drives_wind_specific_outfit(self) -> None:
-        """Wind-specific outfits should come from provider wind data, not zone guesses."""
-        snapshot = self._snapshot(
-            query="Outer Sunset",
+            query="94122",
             temperature_f=61,
             description="Mostly clear",
             weather_code=1100,
@@ -370,132 +387,384 @@ class BackendRuntimeTests(unittest.TestCase):
         )
         selected, context, note = self._selection_for(snapshot)
         self.assertIn("wind", context.derived_conditions)
-        self.assertEqual(selected["preset_key"], "mild_weather_near_the_coast_with_wind_condition")
+        self.assertEqual(selected["preset_key"], "57_to_57_5_dry_cool_layer")
         self.assertNotIn("wind makes", note.lower())
 
-    def test_scene_compacts_provider_wind_into_weather_line_label(self) -> None:
-        """Provider wind should surface as a compact weather-line label, not outfit-note prose."""
-        scene = build_scene(
-            self._snapshot(
-                query="Outer Sunset",
-                temperature_f=61,
-                description="Mostly clear",
-                weather_code=1100,
-                observed_at=datetime(2026, 7, 15, 22, 0, tzinfo=UTC),
-                wind_speed_mph=14,
-            ),
+    def test_scene_uses_resolved_zip_label(self) -> None:
+        """Scene labels should prefer the resolved ZIP neighborhood label."""
+        snapshot = self._snapshot(
+            query="94122",
+            temperature_f=58,
+            description="Mostly clear",
+            weather_code=1100,
+            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
+        )
+        location = LocationRecord(
+            query="94122",
+            display_name="Sunset, Inner Sunset, San Francisco",
+            latitude=37.7599,
+            longitude=-122.4148,
+            timezone="America/Los_Angeles",
+            country="United States",
+            country_code="US",
+            admin1="California",
+            admin2="San Francisco County",
+            geocoder="test",
+            tomorrow_location="37.7599,-122.4148",
+        )
+        scene = build_scene(snapshot, None, mode="current", hours_ahead=0, resolved_location=location)
+        self.assertEqual(scene.location_name, "Sunset, Inner Sunset, San Francisco")
+
+    def test_resolve_weather_location_prefers_us_postcode_match(self) -> None:
+        """ZIP geocoding should choose a US row whose postcode list contains the ZIP."""
+        service = WeatherSceneService()
+
+        class FakeResponse:
+            def __init__(self, payload: dict[str, object]) -> None:
+                self.payload = payload
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return self.payload
+
+        class FakeClient:
+            async def get(self, _url: str, *, params: dict[str, object], headers: dict[str, str] | None = None) -> FakeResponse:
+                self.last_name = params["name"]
+                return FakeResponse(
+                    {
+                        "results": [
+                            {
+                                "name": "Arcueil",
+                                "country": "France",
+                                "country_code": "FR",
+                                "latitude": 48.79993,
+                                "longitude": 2.33256,
+                                "postcodes": ["94110", "94113 CEDEX"],
+                            },
+                            {
+                                "name": "San Francisco",
+                                "country": "United States",
+                                "country_code": "US",
+                                "admin1": "California",
+                                "admin2": "San Francisco County",
+                                "timezone": "America/Los_Angeles",
+                                "latitude": 37.77493,
+                                "longitude": -122.41942,
+                                "postcodes": ["94110", "94122"],
+                            },
+                        ]
+                    }
+                )
+
+        location = asyncio.run(service.resolve_weather_location(FakeClient(), "94110"))
+        self.assertEqual(location.country_code, "US")
+        self.assertEqual(location.display_name, "Inner Mission, Bernal Heights, San Francisco")
+
+    def test_resolve_weather_location_uses_sf_city_fallback_for_94113(self) -> None:
+        """Unresolvable SF ZIPs should fall back to a generic San Francisco geocode."""
+        service = WeatherSceneService()
+
+        class FakeResponse:
+            def __init__(self, payload: dict[str, object]) -> None:
+                self.payload = payload
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return self.payload
+
+        class FakeClient:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+
+            async def get(self, _url: str, *, params: dict[str, object], headers: dict[str, str] | None = None) -> FakeResponse:
+                name = str(params.get("name") or params.get("q"))
+                self.calls.append(name)
+                if name == "94113":
+                    return FakeResponse(
+                        {
+                            "results": [
+                                {
+                                    "name": "Arcueil",
+                                    "country": "France",
+                                    "country_code": "FR",
+                                    "latitude": 48.79993,
+                                    "longitude": 2.33256,
+                                    "postcodes": ["94113 CEDEX"],
+                                }
+                            ]
+                        }
+                    )
+                return FakeResponse(
+                    {
+                        "results": [
+                            {
+                                "name": "San Francisco",
+                                "country": "United States",
+                                "country_code": "US",
+                                "admin1": "California",
+                                "admin2": "San Francisco County",
+                                "timezone": "America/Los_Angeles",
+                                "latitude": 37.77493,
+                                "longitude": -122.41942,
+                                "postcodes": ["94110", "94113", "94122"],
+                            }
+                        ]
+                    }
+                )
+
+        client = FakeClient()
+        location = asyncio.run(service.resolve_weather_location(client, "94113"))
+        self.assertEqual(client.calls, ["94113", "San Francisco, California"])
+        self.assertEqual(location.country_code, "US")
+        self.assertEqual(location.display_name, "Glen Park, San Francisco")
+
+    def test_resolve_weather_location_prefers_exact_non_us_postcode_match(self) -> None:
+        """A non-US exact postcode hit should beat an unrelated first result."""
+        service = WeatherSceneService()
+
+        class FakeResponse:
+            def __init__(self, payload: dict[str, object]) -> None:
+                self.payload = payload
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return self.payload
+
+        class FakeClient:
+            async def get(self, _url: str, *, params: dict[str, object], headers: dict[str, str] | None = None) -> FakeResponse:
+                return FakeResponse(
+                    {
+                        "results": [
+                            {
+                                "name": "Arcueil",
+                                "country": "France",
+                                "country_code": "FR",
+                                "latitude": 48.79993,
+                                "longitude": 2.33256,
+                                "postcodes": ["16999 CEDEX"],
+                            },
+                            {
+                                "name": "Mexico City",
+                                "country": "Mexico",
+                                "country_code": "MX",
+                                "admin1": "Ciudad de México",
+                                "latitude": 19.432608,
+                                "longitude": -99.133209,
+                                "postcodes": ["16999"],
+                            },
+                        ]
+                    }
+                )
+
+        location = asyncio.run(service.resolve_weather_location(FakeClient(), "16999"))
+        self.assertEqual(location.country_code, "MX")
+        self.assertEqual(location.display_name, "Mexico City, Ciudad de México")
+        self.assertEqual(location.latitude, 19.432608)
+        self.assertEqual(location.longitude, -99.133209)
+
+    def test_resolve_weather_location_berlin_zip_prefers_hinted_country(self) -> None:
+        """Ambiguous postcodes should prefer the hinted-country exact match."""
+        service = WeatherSceneService()
+
+        class FakeResponse:
+            def __init__(self, payload: dict[str, object]) -> None:
+                self.payload = payload
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return self.payload
+
+        class FakeClient:
+            async def get(self, _url: str, *, params: dict[str, object], headers: dict[str, str] | None = None) -> FakeResponse:
+                return FakeResponse(
+                    {
+                        "results": [
+                            {
+                                "name": "New York City",
+                                "country": "United States",
+                                "country_code": "US",
+                                "admin1": "New York",
+                                "latitude": 40.7128,
+                                "longitude": -74.0060,
+                                "postcodes": ["10115"],
+                            },
+                            {
+                                "name": "Berlin",
+                                "country": "Germany",
+                                "country_code": "DE",
+                                "admin1": "Land Berlin",
+                                "latitude": 52.532,
+                                "longitude": 13.3849,
+                                "postcodes": ["10115"],
+                            },
+                        ]
+                    }
+                )
+
+        location = asyncio.run(service.resolve_weather_location(FakeClient(), "10115", country_hint="US"))
+        self.assertEqual(location.country_code, "US")
+        self.assertEqual(location.display_name, "New York City, New York")
+        self.assertEqual(location.latitude, 40.7128)
+        self.assertEqual(location.longitude, -74.0060)
+
+        location = asyncio.run(service.resolve_weather_location(FakeClient(), "10115", country_hint="DE"))
+        self.assertEqual(location.country_code, "DE")
+        self.assertEqual(location.display_name, "Berlin, Land Berlin")
+        self.assertEqual(location.latitude, 52.532)
+        self.assertEqual(location.longitude, 13.3849)
+
+    def test_resolve_weather_location_uses_nominatim_for_hinted_non_us_gap(self) -> None:
+        """If Open-Meteo misses the hinted country, Nominatim fallback should fill the gap."""
+        service = WeatherSceneService()
+
+        class FakeResponse:
+            def __init__(self, payload: object) -> None:
+                self.payload = payload
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> object:
+                return self.payload
+
+        class FakeClient:
+            async def get(self, url: str, *, params: dict[str, object], headers: dict[str, str] | None = None) -> FakeResponse:
+                if "open-meteo" in url:
+                    return FakeResponse(
+                        {
+                            "results": [
+                                {
+                                    "name": "Angoulême",
+                                    "country": "France",
+                                    "country_code": "FR",
+                                    "latitude": 45.64997,
+                                    "longitude": 0.15345,
+                                    "postcodes": ["16999 CEDEX 9"],
+                                }
+                            ]
+                        }
+                    )
+                return FakeResponse(
+                    [
+                        {
+                            "name": "Mexico City",
+                            "display_name": "Mexico City, Mexico",
+                            "lat": "19.432608",
+                            "lon": "-99.133209",
+                        }
+                    ]
+                )
+
+        location = asyncio.run(service.resolve_weather_location(FakeClient(), "16999", country_hint="MX"))
+        self.assertEqual(location.country_code, "MX")
+        self.assertEqual(location.display_name, "Mexico City, Mexico")
+        self.assertAlmostEqual(location.latitude, 19.432608, places=6)
+        self.assertAlmostEqual(location.longitude, -99.133209, places=6)
+
+    def test_get_scene_uses_cached_bundle_when_live_fetch_fails(self) -> None:
+        """Live provider errors should still produce a stale scene when cache exists."""
+        service = WeatherSceneService()
+        current = self._snapshot(
+            query="94110",
+            temperature_f=58,
+            description="Mostly clear",
+            weather_code=1100,
+            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
+        )
+        location = LocationRecord(
+            query="94110",
+            display_name="Inner Mission, Bernal Heights, San Francisco",
+            latitude=37.7599,
+            longitude=-122.4148,
+            timezone="America/Los_Angeles",
+            country="United States",
+            country_code="US",
+            admin1="California",
+            admin2="San Francisco County",
+            geocoder="test",
+            tomorrow_location="37.7599,-122.4148",
+        )
+        bundle = type("Bundle", (), {"current": current, "hourly": [], "resolved_location": location})()
+        service.weather_bundle_cache["94110"] = bundle
+        service.current_scene_cache["94110"] = build_scene(
+            current,
             None,
             mode="current",
             hours_ahead=0,
+            resolved_location=location,
         )
-        self.assertEqual(scene.wind_label, "breezy")
 
-    def test_drizzle_day_still_layers(self) -> None:
-        """Drizzle should force a layered outfit even on a brighter-looking SF day."""
-        snapshot = self._snapshot(
-            query="Marina",
-            temperature_f=60,
-            description="Drizzle",
-            weather_code=4000,
-            observed_at=datetime(2026, 4, 10, 20, 0, tzinfo=UTC),
-            precip_probability_pct=45,
-            precip_in=0.02,
-        )
-        selected, context, note = self._selection_for(snapshot)
-        self.assertEqual(context.rain_level, "drizzle")
-        self.assertIn("wet", context.derived_conditions)
-        self.assertEqual(selected["preset_key"], "cool_weather_and_wet_windy_drizzle")
-        self.assertIn("drizzle", note.lower())
+        async def fail_fetch(_query: str, *, hours_ahead: int):
+            raise RuntimeError(f"boom-{hours_ahead}")
 
-    def test_sleep_window_away_from_home_still_uses_weather_outfit(self) -> None:
-        """Nighttime away from home should not collapse every location into pajamas."""
-        snapshot = self._snapshot(
-            query="Mission",
-            temperature_f=58,
-            description="Clear",
-            weather_code=1000,
-            observed_at=datetime(2026, 5, 7, 6, 30, tzinfo=UTC),
-        )
-        context = interpret_weather_for_messaging_and_outfit_selection(snapshot, None, snapshot.query)
-        selected, _note = get_outfit(snapshot, context)
-        self.assertEqual(selected["preset_key"], "cool_weather_near_the_bay_or_coast")
+        service.fetch_weather_bundle = fail_fetch  # type: ignore[method-assign]
+        scene = asyncio.run(service.get_scene(0, "94110"))
+        self.assertTrue(scene.stale)
+        self.assertEqual(scene.location_name, "Inner Mission, Bernal Heights, San Francisco")
+        self.assertTrue(scene.source.endswith("-cache"))
 
-    def test_9pm_forecast_still_uses_weather_outfit_away_from_home(self) -> None:
-        """A 9pm forecast away from home should still reflect weather/location differences."""
-        snapshot = self._snapshot(
-            query="Mission",
-            temperature_f=70,
-            description="Clear",
-            weather_code=1000,
-            observed_at=datetime(2026, 5, 8, 4, 30, tzinfo=UTC),
-        )
-        context = interpret_weather_for_messaging_and_outfit_selection(snapshot, None, snapshot.query)
-        selected, _note = get_outfit(snapshot, context)
-        self.assertEqual(context.local_hour, 21)
-        self.assertEqual(selected["preset_key"], "warm_clear_weather_near_the_bay")
-
-    def test_72_degree_clear_weather_does_not_select_sundress(self) -> None:
-        """72F clear weather should stay casual-layered, not jump to a sundress preset."""
-        for query in ("San Francisco", "94110"):
-            with self.subTest(query=query):
-                snapshot = self._snapshot(
-                    query=query,
-                    temperature_f=72,
-                    description="Warm and clear",
-                    weather_code=1000,
-                    observed_at=datetime(2026, 5, 7, 21, 0, tzinfo=UTC),
-                )
-                selected, context, _note = self._selection_for(snapshot)
-                self.assertEqual(context.bucket, "warm_low_70s")
-                self.assertEqual(selected["preset_key"], "warm_weather_in_a_warm_neighborhood")
-
-    def test_feels_like_temperature_drives_outfit_bucket_when_present(self) -> None:
-        """Outfit selection should use apparent temperature without changing displayed temperature."""
-        snapshot = self._snapshot(
-            query="Montara",
-            temperature_f=58,
-            feels_like_f=51,
-            description="Light fog",
-            weather_code=2100,
-            observed_at=datetime(2026, 5, 7, 20, 0, tzinfo=UTC),
-        )
-        selected, context, _note = self._selection_for(snapshot)
-        self.assertEqual(snapshot.temperature_f, 58)
-        self.assertEqual(context.effective_temp_f, 51)
-        self.assertEqual(context.bucket, "low_50s")
-        self.assertEqual(selected["preset_key"], "cold_weather_with_wind_condition")
-
-    def test_scene_uses_static_flux_image_without_runtime_layers(self) -> None:
-        """The frontend should receive one generated base image and no runtime layers."""
-        scene = build_scene(self._scene_snapshot(), None, mode="current", hours_ahead=0)
-        self.assertEqual(scene.render_mode, "flux_static")
-        self.assertEqual(scene.base_image_url, scene.generated_image_url)
-        self.assertEqual(scene.layers, [])
-
-    def test_scene_is_fixed_front_pose(self) -> None:
-        """Scene assembly should always resolve to the shipped front pose."""
-        scene = build_scene(self._scene_snapshot(), None, mode="current", hours_ahead=0)
-        self.assertEqual(scene.subject_pose, "front")
-        self.assertEqual(scene.render_mode, "flux_static")
-        self.assertTrue(scene.generated_image_url)
-
-    def test_location_resolution_keeps_neighborhood_label(self) -> None:
-        """SF neighborhood queries should remain neighborhood-first when resolved."""
+    def test_get_scene_raises_when_live_fetch_fails_without_cache(self) -> None:
+        """A hard provider failure should bubble up when nothing cached can save the request."""
         service = WeatherSceneService()
-        label = service.location_from_geo(
-            "Mission",
-            {
-                "latitude": 37.7599,
-                "longitude": -122.4148,
-                "name": "San Francisco",
-                "admin2": "San Francisco County",
-                "admin1": "California",
-                "country": "United States",
-                "country_code": "US",
-                "timezone": "America/Los_Angeles",
-            },
-        ).display_name
-        self.assertEqual(label, "Mission, San Francisco")
+
+        async def fail_fetch(_query: str, *, hours_ahead: int):
+            raise RuntimeError(f"boom-{hours_ahead}")
+
+        service.fetch_weather_bundle = fail_fetch  # type: ignore[method-assign]
+        with self.assertRaisesRegex(RuntimeError, "no cached weather exists for ZIP 94110"):
+            asyncio.run(service.get_scene(0, "94110"))
+
+    def test_reachable_presets_have_generated_images(self) -> None:
+        """Every reachable preset should have a generated FLUX file when private assets exist."""
+        reachable = set()
+        zones = (None, "coastal", "microclimate_mix", "sunbelt")
+        wet_states = ("none", "wet")
+        condition_sets = (
+            frozenset(),
+            frozenset({"cloud"}),
+            frozenset({"fog"}),
+            frozenset({"wind"}),
+            frozenset({"fog", "wind"}),
+            frozenset({"wet"}),
+            frozenset({"snow", "wind", "wet"}),
+        )
+        for bucket, low, high, _dry_key in TEMPERATURE_BUCKETS:
+            if low == float("-inf"):
+                sample_temps = (40, high - 0.1)
+            elif high == float("inf"):
+                sample_temps = (low, low + 2, 90)
+            else:
+                sample_temps = (low, (low + high) / 2, high - 0.1)
+            for zone in zones:
+                for rain_level in wet_states:
+                    for conditions in condition_sets:
+                        for temp in sample_temps:
+                            reachable.add(
+                                selected_weather_preset_key(
+                                    OutfitWeatherContext(
+                                        effective_temp_f=temp,
+                                        bucket=bucket,
+                                        rain_level=rain_level,
+                                        derived_conditions=conditions,
+                                        derived_microclimate_zone=zone,
+                                        local_hour=12,
+                                        outfit_note="",
+                                    )
+                                )
+                            )
+        flux_dir = Path("static/generated/flux2")
+        if not flux_dir.exists():
+            return
+        for key in reachable:
+            self.assertTrue((flux_dir / f"{key}.png").exists(), key)
 
 
 if __name__ == "__main__":

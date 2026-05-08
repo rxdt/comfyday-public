@@ -1,0 +1,32 @@
+{
+  "resolved_location": {
+    "query": "94110",
+    "display_name": "Inner Mission, Bernal Heights, San Francisco",
+    "latitude": 37.77493,
+    "longitude": -122.41942,
+    "timezone": "America/Los_Angeles",
+    "country": "United States",
+    "country_code": "US",
+    "admin1": "California",
+    "admin2": "San Francisco County",
+    "geocoder": "open-meteo-search-v1",
+    "tomorrow_location": "37.77493,-122.41942"
+  },
+  "current": {
+    "query": "94110",
+    "location_name": "Inner Mission, Bernal Heights, San Francisco",
+    "temperature_f": 52.38,
+    "precip_probability_pct": 0,
+    "description": "Mostly clear",
+    "precip_in": 0.0,
+    "weather_code": 1100,
+    "snow": false,
+    "night": true,
+    "observed_at": "2026-05-09T06:56:00+00:00",
+    "source": "tomorrow-realtime",
+    "feels_like_f": 52.4,
+    "wind_speed_mph": 9.9,
+    "wind_gust_mph": 24.2
+  },
+  "hourly": []
+}

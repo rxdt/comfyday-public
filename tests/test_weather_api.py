@@ -24,7 +24,7 @@ class WeatherApiTests(unittest.IsolatedAsyncioTestCase):
     def _location(self) -> LocationRecord:
         """Build one provider-ready test location."""
         return LocationRecord(
-            query="Montara",
+            query="94037",
             display_name="Montara, San Mateo",
             latitude=37.5422,
             longitude=-122.5161,
@@ -40,8 +40,8 @@ class WeatherApiTests(unittest.IsolatedAsyncioTestCase):
     def test_build_snapshot_infers_snow_and_night(self) -> None:
         """Snow codes and local evening hours should set normalized booleans."""
         snapshot = build_snapshot(
-            query="Outer Sunset",
-            location_name="Outer Sunset, San Francisco",
+            query="94122",
+            location_name="Sunset, Inner Sunset, San Francisco",
             temperature_f=39,
             feels_like_f=34,
             wind_speed_mph=13,
@@ -121,30 +121,34 @@ class WeatherApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_weatherstack_bundle_reads_feelslike(self) -> None:
         """Weatherstack `feelslike` should become normalized feels-like temperature."""
+        seen_paths = []
 
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(
-                lambda _request: httpx.Response(
-                    200,
-                    json={
-                        "location": {
-                            "name": "Montara",
-                            "region": "California",
-                            "country": "United States",
-                            "timezone_id": "America/Los_Angeles",
-                            "localtime": "2026-05-07 13:00",
+                lambda request: (
+                    seen_paths.append(request.url.path)
+                    or httpx.Response(
+                        200,
+                        json={
+                            "location": {
+                                "name": "94037",
+                                "region": "California",
+                                "country": "United States",
+                                "timezone_id": "America/Los_Angeles",
+                                "localtime": "2026-05-07 13:00",
+                            },
+                            "current": {
+                                "temperature": 58,
+                                "feelslike": 51,
+                                "wind_speed": 14,
+                                "wind_gust": 19,
+                                "weather_code": 2100,
+                                "weather_descriptions": ["Light fog"],
+                                "precip": 0,
+                            },
+                            "forecast": {},
                         },
-                        "current": {
-                            "temperature": 58,
-                            "feelslike": 51,
-                            "wind_speed": 14,
-                            "wind_gust": 19,
-                            "weather_code": 2100,
-                            "weather_descriptions": ["Light fog"],
-                            "precip": 0,
-                        },
-                        "forecast": {},
-                    },
+                    )
                 )
             )
         ) as client:
@@ -154,11 +158,13 @@ class WeatherApiTests(unittest.IsolatedAsyncioTestCase):
                 api_key="x",
                 concise_location_label=lambda *args, **kwargs: "Montara, San Mateo",
                 max_forecast_hours=0,
+                hours_ahead=0,
             )
         self.assertEqual(bundle.current.temperature_f, 58)
         self.assertEqual(bundle.current.feels_like_f, 51)
         self.assertEqual(bundle.current.wind_speed_mph, 14)
         self.assertEqual(bundle.current.wind_gust_mph, 19)
+        self.assertEqual(seen_paths, ["/current"])
 
 
 if __name__ == "__main__":

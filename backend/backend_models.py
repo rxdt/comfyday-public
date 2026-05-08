@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -39,6 +39,8 @@ class SceneState:
     generated_image_url: str | None
     selected_layer_keys: list[str]
     layers: list[dict[str, Any]]
+    video_url: str | None = None
+    forecast_temps: dict[str, float] = field(default_factory=dict)
 
     def signature(self) -> tuple[Any, ...]:
         """Return the stable subset used to detect scene changes."""
@@ -50,6 +52,8 @@ class SceneState:
             self.rain_level,
             self.snow,
             self.night,
+            self.generated_image_url,
+            self.video_url,
             self.render_mode,
             tuple(self.selected_layer_keys),
             tuple(str(layer.get("key") or "") for layer in self.layers),

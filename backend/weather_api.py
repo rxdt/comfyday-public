@@ -41,11 +41,6 @@ WEATHER_CODE_MAP = {
 }
 
 
-def describe_weather_code(code: int) -> str:
-    """Map provider weather codes into short human-readable descriptions."""
-    return WEATHER_CODE_MAP.get(code, "Weather unavailable")
-
-
 def is_snow_code(code: int) -> bool:
     """Return whether the normalized weather code represents snow or flurries."""
     return code in {5000, 5001, 5100, 5101}
@@ -58,7 +53,7 @@ def infer_night(observed_at: datetime, timezone_name: str | None) -> bool:
             observed_at = observed_at.astimezone(ZoneInfo(timezone_name))
         except ZoneInfoNotFoundError:
             pass
-    return observed_at.hour < 6 or observed_at.hour >= 18
+    return observed_at.hour < 5 or observed_at.hour >= 21
 
 
 def explain_weather_provider_failure(exc: BaseException) -> str:
@@ -146,7 +141,9 @@ def build_snapshot(
         location_name=location_name,
         temperature_f=temperature_f,
         precip_probability_pct=max(0, min(100, precip_probability_pct)),
-        description=description_override if description_override is not None else describe_weather_code(weather_code),
+        description=description_override
+        if description_override is not None
+        else WEATHER_CODE_MAP.get(weather_code, "Weather unavailable"),
         precip_in=precip_in,
         weather_code=weather_code,
         snow=snow_override if snow_override is not None else is_snow_code(weather_code),
@@ -165,7 +162,11 @@ async def fetch_tomorrow_bundle(
     """Fetch current and hourly weather from Tomorrow.io for one resolved location."""
     realtime_response = await client.get(
         "https://api.tomorrow.io/v4/weather/realtime",
-        params={"location": loc.tomorrow_location, "units": "imperial", "apikey": api_key},
+        params={
+            "location": loc.tomorrow_location,
+            "units": "imperial",
+            "apikey": api_key,
+        },
     )
     realtime_response.raise_for_status()
     realtime_payload = realtime_response.json()
@@ -176,13 +177,21 @@ async def fetch_tomorrow_bundle(
         query=loc.query,
         location_name=loc.display_name,
         temperature_f=required_float(current_values, "temperature"),
-        feels_like_f=float(current_values["temperatureApparent"]) if current_values.get("temperatureApparent") is not None else None,
-        wind_speed_mph=float(current_values["windSpeed"]) if current_values.get("windSpeed") is not None else None,
-        wind_gust_mph=float(current_values["windGust"]) if current_values.get("windGust") is not None else None,
+        feels_like_f=float(current_values["temperatureApparent"])
+        if current_values.get("temperatureApparent") is not None
+        else None,
+        wind_speed_mph=float(current_values["windSpeed"])
+        if current_values.get("windSpeed") is not None
+        else None,
+        wind_gust_mph=float(current_values["windGust"])
+        if current_values.get("windGust") is not None
+        else None,
         precip_probability_pct=int(current_values.get("precipitationProbability") or 0),
         precip_in=total_precip_intensity_in(current_values),
         weather_code=required_int(current_values, "weatherCode"),
-        observed_at=parse_utc_timestamp(current.get("time") or datetime.now(UTC).isoformat()),
+        observed_at=parse_utc_timestamp(
+            current.get("time") or datetime.now(UTC).isoformat()
+        ),
         timezone_name=loc.timezone,
         source="tomorrow-realtime",
     )
@@ -190,7 +199,12 @@ async def fetch_tomorrow_bundle(
     if hours_ahead > 0:
         forecast_response = await client.get(
             "https://api.tomorrow.io/v4/weather/forecast",
-            params={"location": loc.tomorrow_location, "timesteps": "1h", "units": "imperial", "apikey": api_key},
+            params={
+                "location": loc.tomorrow_location,
+                "timesteps": "1h",
+                "units": "imperial",
+                "apikey": api_key,
+            },
         )
         forecast_response.raise_for_status()
         forecast_payload = forecast_response.json()
@@ -204,10 +218,18 @@ async def fetch_tomorrow_bundle(
                     query=loc.query,
                     location_name=loc.display_name,
                     temperature_f=required_float(values, "temperature"),
-                    feels_like_f=float(values["temperatureApparent"]) if values.get("temperatureApparent") is not None else None,
-                    wind_speed_mph=float(values["windSpeed"]) if values.get("windSpeed") is not None else None,
-                    wind_gust_mph=float(values["windGust"]) if values.get("windGust") is not None else None,
-                    precip_probability_pct=int(values.get("precipitationProbability") or 0),
+                    feels_like_f=float(values["temperatureApparent"])
+                    if values.get("temperatureApparent") is not None
+                    else None,
+                    wind_speed_mph=float(values["windSpeed"])
+                    if values.get("windSpeed") is not None
+                    else None,
+                    wind_gust_mph=float(values["windGust"])
+                    if values.get("windGust") is not None
+                    else None,
+                    precip_probability_pct=int(
+                        values.get("precipitationProbability") or 0
+                    ),
                     precip_in=total_precip_intensity_in(values),
                     weather_code=required_int(values, "weatherCode"),
                     observed_at=parse_utc_timestamp(entry["time"]),
@@ -215,20 +237,30 @@ async def fetch_tomorrow_bundle(
                     source="tomorrow-forecast",
                 )
             )
-    return ForecastBundle(current=current_snapshot, hourly=hourly, resolved_location=loc)
+    return ForecastBundle(
+        current=current_snapshot, hourly=hourly, resolved_location=loc
+    )
 
 
 def _weatherstack_join_descriptions(row: dict[str, Any]) -> str:
     """Join Weatherstack description fragments into one readable string."""
     return (
-        ", ".join(str(part) for part in (row.get("weather_descriptions") or []) if part).strip()
+        ", ".join(
+            str(part) for part in (row.get("weather_descriptions") or []) if part
+        ).strip()
         or "Weather unavailable"
     )
 
 
 def _weatherstack_precip_probability_pct(row: dict[str, Any]) -> int:
     """Reduce Weatherstack rain/snow chances to one percentage."""
-    return max(0, min(100, max(int(row.get("chanceofrain") or 0), int(row.get("chanceofsnow") or 0))))
+    return max(
+        0,
+        min(
+            100,
+            max(int(row.get("chanceofrain") or 0), int(row.get("chanceofsnow") or 0)),
+        ),
+    )
 
 
 def _weatherstack_infer_snow(row: dict[str, Any]) -> bool:
@@ -240,7 +272,9 @@ def _weatherstack_infer_snow(row: dict[str, Any]) -> bool:
     )
 
 
-def _parse_weatherstack_local_observed_at(location_payload: dict[str, Any], *, timezone_name: str | None) -> datetime:
+def _parse_weatherstack_local_observed_at(
+    location_payload: dict[str, Any], *, timezone_name: str | None
+) -> datetime:
     """Parse Weatherstack localtime into a UTC datetime."""
     local_raw = (location_payload.get("localtime") or "").strip()
     if not local_raw:
@@ -258,7 +292,9 @@ def _parse_weatherstack_hour_observed_at(
     date_key: str, minutes_from_midnight_raw: str, *, timezone_name: str | None
 ) -> datetime:
     """Convert a Weatherstack hourly row into a UTC datetime."""
-    local_dt = datetime.strptime(date_key, "%Y-%m-%d") + timedelta(minutes=int(minutes_from_midnight_raw or 0))
+    local_dt = datetime.strptime(date_key, "%Y-%m-%d") + timedelta(
+        minutes=int(minutes_from_midnight_raw or 0)
+    )
     if timezone_name:
         try:
             return local_dt.replace(tzinfo=ZoneInfo(timezone_name)).astimezone(UTC)
@@ -268,18 +304,31 @@ def _parse_weatherstack_hour_observed_at(
 
 
 async def fetch_weatherstack_bundle(
-    client: httpx.AsyncClient, loc: LocationRecord, *, api_key: str, concise_location_label, max_forecast_hours: int
+    client: httpx.AsyncClient,
+    loc: LocationRecord,
+    *,
+    api_key: str,
+    concise_location_label,
+    max_forecast_hours: int,
+    hours_ahead: int,
 ) -> ForecastBundle:
-    """Fetch current and hourly weather from Weatherstack for one resolved location."""
+    """Fetch Weatherstack current weather, using forecast only when future hours are requested."""
+    endpoint = "forecast" if hours_ahead > 0 else "current"
     response = await client.get(
-        "https://api.weatherstack.com/forecast",
+        f"https://api.weatherstack.com/{endpoint}",
         params={
             "access_key": api_key,
             "query": loc.tomorrow_location,
-            "forecast_days": max(3, (max_forecast_hours + 23) // 24 + 1),
-            "hourly": 1,
-            "interval": 1,
             "units": "f",
+            **(
+                {
+                    "forecast_days": max(3, (max_forecast_hours + 23) // 24 + 1),
+                    "hourly": 1,
+                    "interval": 1,
+                }
+                if hours_ahead > 0
+                else {}
+            ),
         },
     )
     response.raise_for_status()
@@ -291,12 +340,14 @@ async def fetch_weatherstack_bundle(
     location_name = concise_location_label(
         ", ".join(
             part
-            for part in (location_payload.get("name"), location_payload.get("region"), location_payload.get("country"))
+            for part in (
+                location_payload.get("name"),
+                location_payload.get("region"),
+                location_payload.get("country"),
+            )
             if part
         )
         or loc.display_name,
-        admin1=str(location_payload.get("region") or ""),
-        country=str(location_payload.get("country") or ""),
         query=loc.query,
     )
     current_payload = payload.get("current") or {}
@@ -307,16 +358,23 @@ async def fetch_weatherstack_bundle(
         query=loc.query,
         location_name=location_name,
         temperature_f=required_float(current_payload, "temperature"),
-        feels_like_f=float(current_payload["feelslike"]) if current_payload.get("feelslike") is not None else None,
-        wind_speed_mph=float(current_payload["wind_speed"]) if current_payload.get("wind_speed") is not None else None,
-        wind_gust_mph=float(current_payload["wind_gust"]) if current_payload.get("wind_gust") is not None else None,
+        feels_like_f=float(current_payload["feelslike"])
+        if current_payload.get("feelslike") is not None
+        else None,
+        wind_speed_mph=float(current_payload["wind_speed"])
+        if current_payload.get("wind_speed") is not None
+        else None,
+        wind_gust_mph=float(current_payload["wind_gust"])
+        if current_payload.get("wind_gust") is not None
+        else None,
         precip_probability_pct=precip_probability,
         precip_in=float(current_payload.get("precip") or 0),
         weather_code=required_int(current_payload, "weather_code"),
-        observed_at=_parse_weatherstack_local_observed_at(location_payload, timezone_name=timezone_name),
+        observed_at=_parse_weatherstack_local_observed_at(
+            location_payload, timezone_name=timezone_name
+        ),
         timezone_name=timezone_name,
         source="weatherstack-current",
-        description_override=_weatherstack_join_descriptions(current_payload),
         snow_override=_weatherstack_infer_snow(current_payload),
     )
     hourly: list[WeatherSnapshot] = []
@@ -331,10 +389,18 @@ async def fetch_weatherstack_bundle(
                     query=loc.query,
                     location_name=location_name,
                     temperature_f=required_float(hour_row, "temperature"),
-                    feels_like_f=float(hour_row["feelslike"]) if hour_row.get("feelslike") is not None else None,
-                    wind_speed_mph=float(hour_row["wind_speed"]) if hour_row.get("wind_speed") is not None else None,
-                    wind_gust_mph=float(hour_row["wind_gust"]) if hour_row.get("wind_gust") is not None else None,
-                    precip_probability_pct=_weatherstack_precip_probability_pct(hour_row),
+                    feels_like_f=float(hour_row["feelslike"])
+                    if hour_row.get("feelslike") is not None
+                    else None,
+                    wind_speed_mph=float(hour_row["wind_speed"])
+                    if hour_row.get("wind_speed") is not None
+                    else None,
+                    wind_gust_mph=float(hour_row["wind_gust"])
+                    if hour_row.get("wind_gust") is not None
+                    else None,
+                    precip_probability_pct=_weatherstack_precip_probability_pct(
+                        hour_row
+                    ),
                     precip_in=float(hour_row.get("precip") or 0),
                     weather_code=required_int(hour_row, "weather_code"),
                     observed_at=_parse_weatherstack_hour_observed_at(
@@ -342,9 +408,10 @@ async def fetch_weatherstack_bundle(
                     ),
                     timezone_name=timezone_name,
                     source="weatherstack-forecast",
-                    description_override=_weatherstack_join_descriptions(hour_row),
                     snow_override=_weatherstack_infer_snow(hour_row),
                 )
             )
     hourly.sort(key=lambda snapshot: snapshot.observed_at)
-    return ForecastBundle(current=current_snapshot, hourly=hourly, resolved_location=loc)
+    return ForecastBundle(
+        current=current_snapshot, hourly=hourly, resolved_location=loc
+    )

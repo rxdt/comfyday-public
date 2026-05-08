@@ -1,6 +1,7 @@
 const initialScene = window.__INITIAL_SCENE__;
 const maxForecastHours = window.__MAX_FORECAST_HOURS__ || 12;
-const defaultLocationQuery = "94110";
+const defaultLocationQuery = "94122";
+const zipCodePattern = /^\d{5}$/;
 
 const elements = {
   basePhoto: document.getElementById("base-photo"),
@@ -8,8 +9,8 @@ const elements = {
   sceneLayers: document.getElementById("scene-layers"),
   temperature: document.getElementById("temperature"),
   rainChance: document.getElementById("rain-chance"),
-  weatherKind: document.getElementById("weather-kind"),
   description: document.getElementById("description"),
+  weatherTitlePrefix: document.getElementById("weather-title-prefix"),
   windFragment: document.getElementById("wind-fragment"),
   outfitNote: document.getElementById("outfit-note"),
   statusLine: document.getElementById("status-line"),
@@ -22,8 +23,8 @@ const elements = {
 
 let currentScene = null;
 
-function poseForApi() {
-  return "auto";
+function sanitizeZipInputValue(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 5);
 }
 
 function applyLayerFit(img, fit) {
@@ -81,6 +82,8 @@ function applyLayerFit(img, fit) {
 function setBaseImage(scene) {
   const { basePhoto, missingBase } = elements;
   const cacheKey = encodeURIComponent(`${scene.generated_image_url || scene.base_image_url}:${scene.last_updated}`);
+  basePhoto.classList.add("is-hidden");
+  missingBase.classList.add("is-hidden");
   basePhoto.src = `${scene.base_image_url}?v=${cacheKey}`;
   basePhoto.onload = () => {
     basePhoto.classList.remove("is-hidden");
@@ -117,17 +120,22 @@ function renderScene(scene) {
   if (elements.locationLabel) {
     elements.locationLabel.textContent = scene.location_name || "San Francisco";
   }
-  const temperature = Number(scene.temperature_f).toFixed(0);
+  if (elements.weatherTitlePrefix) {
+    elements.weatherTitlePrefix.textContent =
+      scene.hours_ahead === 0
+        ? "Current weather in"
+        : `Forecast weather in ${scene.hours_ahead} hour${scene.hours_ahead === 1 ? "" : "s"} for`;
+  }
+  const temperature = Number(scene.temperature_f).toFixed(1);
   const feelsLike =
     scene.feels_like_f === undefined || scene.feels_like_f === null
       ? ""
-      : ` (feels like ${Number(scene.feels_like_f).toFixed(0)})`;
+      : ` (feels like ${Number(scene.feels_like_f).toFixed(1)})`;
   elements.temperature.textContent = `${temperature}${feelsLike}`;
   elements.rainChance.textContent = String(scene.precip_probability_pct);
-  elements.weatherKind.textContent = scene.rain_level === "none" ? (scene.night ? "night" : "sun") : "rain";
   elements.description.textContent =
     scene.hours_ahead === 0
-      ? `${scene.description.toLowerCase()} right now`
+      ? `${scene.description.toLowerCase()}`
       : `${scene.description.toLowerCase()} ${scene.hours_ahead} hour${scene.hours_ahead === 1 ? "" : "s"} from now`;
   elements.windFragment.textContent = scene.wind_label ? ` · ${scene.wind_label}` : "";
   elements.outfitNote.textContent = scene.outfit_note || "";
@@ -143,18 +151,18 @@ function renderScene(scene) {
   renderLayers(scene);
 }
 
-async function loadScene(hoursAhead, query, basePose) {
+async function loadScene(hoursAhead, query) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 12000);
   try {
-    const pose = basePose !== undefined && basePose !== null && basePose !== "" ? basePose : poseForApi();
+    const normalizedQuery = (query || "").trim() || defaultLocationQuery;
+    if (!zipCodePattern.test(normalizedQuery)) {
+      throw new Error("ZIP code must be exactly 5 digits.");
+    }
     const params = new URLSearchParams({
       hours_ahead: String(hoursAhead),
-      base_pose: pose,
+      query: normalizedQuery,
     });
-    if (query && query.trim()) {
-      params.set("query", query.trim());
-    }
     const response = await fetch(`/api/scene?${params.toString()}`, {
       cache: "no-store",
       signal: controller.signal,
@@ -177,7 +185,19 @@ elements.timeForm.addEventListener("submit", (event) => {
   const requested = Number(elements.hoursAhead.value || 0);
   const normalized = Math.max(0, Math.min(maxForecastHours, Math.floor(requested)));
   elements.hoursAhead.value = String(normalized);
+  if (elements.locationQuery) {
+    elements.locationQuery.value = sanitizeZipInputValue(elements.locationQuery.value);
+  }
   loadScene(normalized, elements.locationQuery?.value || defaultLocationQuery);
 });
+
+if (elements.locationQuery) {
+  const enforceZipDigitsOnly = () => {
+    elements.locationQuery.value = sanitizeZipInputValue(elements.locationQuery.value);
+  };
+  elements.locationQuery.addEventListener("input", enforceZipDigitsOnly);
+  elements.locationQuery.addEventListener("blur", enforceZipDigitsOnly);
+  enforceZipDigitsOnly();
+}
 
 loadScene(initialScene.hours_ahead || 0, initialScene.query || defaultLocationQuery);
