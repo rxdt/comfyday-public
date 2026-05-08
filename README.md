@@ -1,9 +1,9 @@
 # 🌈 Comfyday
 
 
-###   💜💛💙💚❤️
+###   💜💛💙💚❤️      For Saoirse       💜💛💙💚❤️
 
-> **For Saoirse - A tiny weather-to-outfit app for “what do I wear right now?” days**
+> **A tiny weather-to-outfit app for “what do I wear right now?” days**
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-weather_API-009688?style=for-the-badge&logo=fastapi&logoColor=white)
@@ -158,14 +158,29 @@ The Replicate key is only for offline image generation and should not be needed 
 
 ## 🎨 Regenerating Outfit Images
 
-The private workflow uses Replicate/FLUX to regenerate static outfit images:
+The private workflow uses **Replicate** with **Black Forest Labs FLUX.2 Pro** to regenerate static outfit images:
 
 ```bash
 uv sync --group generate
 uv run --group generate python scripts/run_replicate.py
 ```
 
-Runtime does **not** call FLUX. The app only serves static outfit renders.
+Generation script:
+
+```text
+scripts/run_replicate.py
+  -> model: black-forest-labs/flux-2-pro
+  -> input: base model image + outfit/accessory reference images
+  -> output: one finished static outfit render
+```
+
+Runtime does **not** call Replicate or FLUX. The app only serves already-generated static outfit renders.
+
+Generation env var, private/offline only:
+
+```bash
+COMFY_REPLICATE_API_KEY=...
+```
 
 ## 💅 Why Static Images?
 
