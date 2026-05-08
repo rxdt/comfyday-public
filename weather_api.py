@@ -268,18 +268,31 @@ def _parse_weatherstack_hour_observed_at(
 
 
 async def fetch_weatherstack_bundle(
-    client: httpx.AsyncClient, loc: LocationRecord, *, api_key: str, concise_location_label, max_forecast_hours: int
+    client: httpx.AsyncClient,
+    loc: LocationRecord,
+    *,
+    api_key: str,
+    concise_location_label,
+    max_forecast_hours: int,
+    hours_ahead: int,
 ) -> ForecastBundle:
-    """Fetch current and hourly weather from Weatherstack for one resolved location."""
+    """Fetch Weatherstack current weather, using forecast only when future hours are requested."""
+    endpoint = "forecast" if hours_ahead > 0 else "current"
     response = await client.get(
-        "https://api.weatherstack.com/forecast",
+        f"https://api.weatherstack.com/{endpoint}",
         params={
             "access_key": api_key,
             "query": loc.tomorrow_location,
-            "forecast_days": max(3, (max_forecast_hours + 23) // 24 + 1),
-            "hourly": 1,
-            "interval": 1,
             "units": "f",
+            **(
+                {
+                    "forecast_days": max(3, (max_forecast_hours + 23) // 24 + 1),
+                    "hourly": 1,
+                    "interval": 1,
+                }
+                if hours_ahead > 0
+                else {}
+            ),
         },
     )
     response.raise_for_status()

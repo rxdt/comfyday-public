@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 from scripts.run_replicate import BASE_DIR, MODEL_VERSION, OUTPUT_DIR, RERUN_KEYS, build_jobs, get_prompt
+import pytest
 
 
 def test_replicate_jobs_are_local_file_safe() -> None:
     """Generation jobs should be valid before any paid Replicate call happens."""
+    if not (BASE_DIR / "static/assets/base/girl-real-pose-front-left.png").exists():
+        pytest.skip("private base/outfit assets are not included in the public-safe repo")
     jobs = build_jobs()
+    if not RERUN_KEYS:
+        assert jobs == []
+        return
     assert len(jobs) == len(RERUN_KEYS)
     for job in jobs:
         assert str(job["weather_conditions"]) in RERUN_KEYS

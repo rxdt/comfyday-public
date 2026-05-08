@@ -51,9 +51,18 @@ def build_scene(
     changed = not previous or current_signature != previous.signature()
     if changed:
         version += 1
+    location_query = " ".join(
+        part
+        for part in (
+            snapshot.query,
+            resolved_location.query if resolved_location else "",
+            resolved_location.display_name if resolved_location else "",
+        )
+        if part
+    )
     return SceneState(
         version=version,
-        location_name=display_location_name(snapshot.location_name, snapshot.query),
+        location_name=display_location_name(snapshot.location_name, location_query),
         query=snapshot.query,
         weather_latitude=resolved_location.latitude if resolved_location else None,
         weather_longitude=resolved_location.longitude if resolved_location else None,

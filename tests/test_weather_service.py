@@ -42,6 +42,11 @@ class WeatherServiceTests(unittest.IsolatedAsyncioTestCase):
             source="test",
         )
 
+    async def test_default_query_is_hardcoded_to_94110(self) -> None:
+        """The app should always boot on the Mission ZIP, independent of env defaults."""
+        with patch.dict("os.environ", {"WEATHER_QUERY": "94122", "TOMORROW_LOCATION": "94122"}):
+            self.assertEqual(WeatherSceneService().default_query, "94110")
+
     async def test_fetch_weather_bundle_falls_back_to_weatherstack(self) -> None:
         """Tomorrow failure should fall through to Weatherstack when configured."""
         self.service.tomorrow_api_key = "tomorrow"

@@ -24,14 +24,13 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from outfit_logic import WEATHER_OUTFIT_PRESETS
-
-RERUN_KEYS = ("cold_weather_and_dry",)
 BASE_MODEL = Path("static/assets/base/girl-real-pose-front-left.png")
 MODEL_VERSION = "black-forest-labs/flux-2-pro"
 
 STATIC_DIR = BASE_DIR / "static"
 OUTPUT_DIR = STATIC_DIR / "generated" / "flux2"
+RERUN_JOBS: dict[str, tuple[Path, ...]] = {}
+RERUN_KEYS = tuple(RERUN_JOBS)
 
 
 def run_flux2_pro(prompt: str, image_paths: list[Path]) -> str:
@@ -144,17 +143,15 @@ def load_replicate_token() -> str:
 
 
 def build_jobs() -> list[dict[str, object]]:
-    """Build FLUX rerun jobs from the hardcoded temporary preset subset."""
+    """Build explicit FLUX rerun jobs without depending on runtime outfit routing."""
     return [
         {
             "weather_conditions": weather_conditions,
             "prompt": get_prompt(weather_conditions),
-            "input_images": [BASE_DIR / BASE_MODEL, *(BASE_DIR / path for path in image_list)],
+            "input_images": [BASE_DIR / BASE_MODEL, *(BASE_DIR / path for path in image_paths)],
             "output_path": OUTPUT_DIR / f"{weather_conditions}.png",
         }
-        for weather_conditions, image_list in (
-            (weather_conditions, WEATHER_OUTFIT_PRESETS[weather_conditions]) for weather_conditions in RERUN_KEYS
-        )
+        for weather_conditions, image_paths in RERUN_JOBS.items()
     ]
 
 

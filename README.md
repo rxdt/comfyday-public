@@ -1,5 +1,6 @@
-# 🌈 Comfyday [try it](comfyday.vercel.app)
+# 🌈 Comfyday
 
+[try it](comfyday.vercel.app)
 
 ###   💜💛💙💚❤️      For Saoirse       💜💛💙💚❤️
 
@@ -25,14 +26,14 @@ static FLUX image
 
 ## ✨ What It Does
 
-| Feature | Why It Matters |
-| --- | --- |
-| 🌦️ Weather-aware outfits | Uses current/forecast weather instead of a fixed outfit. |
-| 📍 ZIP/place search | Try a ZIP, neighborhood, or city and check weather up to 24 hours ahead. |
-| 🧊 Tight SF-style temp buckets | Most logic is tuned around the common `50s-70s°F` range. |
-| 💨 Provider-based wind/fog/rain | No fake weather guesses; provider data drives outfit changes. |
-| 🖼️ Static generated looks | Runtime is fast because it only selects pre-rendered images. |
-| 📱 Responsive frontend | Built to fit the model + text on desktop and mobile. |
+| Feature                        | Why It Matters                                                           |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| 🌦️ Weather-aware outfits        | Uses current/forecast weather instead of a fixed outfit.                 |
+| 📍 ZIP/place search             | Try a ZIP, neighborhood, or city and check weather up to 24 hours ahead. |
+| 🧊 Tight SF-style temp buckets  | Most logic is tuned around the common `50s-70s°F` range.                 |
+| 💨 Provider-based wind/fog/rain | No fake weather guesses; provider data drives outfit changes.            |
+| 🖼️ Static generated looks       | Runtime is fast because it only selects pre-rendered images.             |
+| 📱 Responsive frontend          | Built to fit the model + text on desktop and mobile.                     |
 
 ## 📸 Screenshots
 
@@ -45,15 +46,15 @@ This public repo excludes the full private generated outfit library. These scree
 
 ## 🧠 Architecture
 
-| Layer | Files | Job |
-| --- | --- | --- |
-| Backend | `main.py` | FastAPI routes, Jinja shell, static file serving |
-| Weather | `weather_service.py` | Tomorrow.io first, Weatherstack fallback, geocoding, cache fallback |
-| Provider normalization | `weather_api.py` | Tomorrow.io / Weatherstack → one `WeatherSnapshot` |
-| Outfit selection | `outfit_logic.py` | Temp bucket + rain/fog/wind → preset key |
-| Scene payload | `scene_builder.py` | One static image URL + compact weather text |
-| Browser UI | `static/app.js`, `static/styles.css` | Fetch scene JSON and render responsively |
-| Generation ops | `scripts/run_replicate.py` | Optional offline reruns for bad FLUX outputs |
+| Layer                  | Files                                | Job                                                                 |
+| ---------------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| Backend                | `main.py`                            | FastAPI routes, Jinja shell, static file serving                    |
+| Weather                | `weather_service.py`                 | Tomorrow.io first, Weatherstack fallback, geocoding, cache fallback |
+| Provider normalization | `weather_api.py`                     | Tomorrow.io / Weatherstack → one `WeatherSnapshot`                  |
+| Outfit selection       | `outfit_logic.py`                    | Temp bucket + rain/fog/wind → preset key                            |
+| Scene payload          | `scene_builder.py`                   | One static image URL + compact weather text                         |
+| Browser UI             | `static/app.js`, `static/styles.css` | Fetch scene JSON and render responsively                            |
+| Generation ops         | `scripts/run_replicate.py`           | Optional offline reruns for bad FLUX outputs                        |
 
 ```text
 main.py
@@ -90,14 +91,14 @@ The live app does **not** run image generation, virtual try-on, or clothing comp
 
 ## 🌦️ Weather Inputs
 
-| Signal | Used For |
-| --- | --- |
-| `temperature` | display temperature |
-| `temperatureApparent` / feels-like | outfit bucket selection |
-| precipitation intensity/probability | drizzle/rain/storm routing |
-| weather code + description | fog, cloud, rain, snow labels |
-| wind speed/gust | breezy/windy labels + wind-specific outfits |
-| local forecast hour | “right now” vs “N hours from now” display |
+| Signal                              | Used For                                    |
+| ----------------------------------- | ------------------------------------------- |
+| `temperature`                       | display temperature                         |
+| `temperatureApparent` / feels-like  | outfit bucket selection                     |
+| precipitation intensity/probability | drizzle/rain/storm routing                  |
+| weather code + description          | fog, cloud, rain, snow labels               |
+| wind speed/gust                     | breezy/windy labels + wind-specific outfits |
+| local forecast hour                 | “right now” vs “N hours from now” display   |
 
 ## 🚫 What This Public Demo Excludes
 

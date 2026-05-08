@@ -257,7 +257,7 @@ class WeatherSceneService:
 
     def __init__(self) -> None:
         """Initialize provider credentials and in-memory scene caches."""
-        self.default_query = os.getenv("WEATHER_QUERY", os.getenv("TOMORROW_LOCATION", os.getenv("WEATHERSTACK_QUERY", "94110")))
+        self.default_query = "94110"
         self.tomorrow_api_key = os.getenv("TOMORROW_API_KEY", "").strip()
         self.weatherstack_api_key = os.getenv("WEATHERSTACK_API_KEY", "").strip()
         self.current_scene_cache: dict[str, SceneState] = {}
@@ -373,6 +373,7 @@ class WeatherSceneService:
                         api_key=self.weatherstack_api_key,
                         concise_location_label=concise_location_label,
                         max_forecast_hours=MAX_FORECAST_HOURS,
+                        hours_ahead=hours_ahead,
                     )
                 except Exception as exc:
                     logger.warning("Weatherstack failed (%s).", explain_weather_provider_failure(exc))

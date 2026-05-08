@@ -8,7 +8,25 @@ from backend_models import LocationRecord, OutfitWeatherContext, WeatherSnapshot
 
 
 SF_ZIP_TO_HOOD: dict[str, tuple[str, str]] = {
+    "94102": ("Hayes Valley / Tenderloin, San Francisco", "mixed_microclimate"),
+    "94103": ("SOMA, San Francisco", "sunbelt"),
+    "94107": ("Potrero Hill / Dogpatch, San Francisco", "sunbelt"),
+    "94109": ("Nob Hill / Russian Hill, San Francisco", "mixed_microclimate"),
     "94110": ("Mission District, San Francisco", "sunbelt"),
+    "94112": ("Outer Mission / Ingleside, San Francisco", "mixed_microclimate"),
+    "94114": ("Castro / Noe Valley, San Francisco", "sunbelt"),
+    "94115": ("NoPa / Pacific Heights, San Francisco", "mixed_microclimate"),
+    "94116": ("Parkside / Outer Sunset, San Francisco", "coastal"),
+    "94117": ("Haight-Ashbury / Cole Valley, San Francisco", "mixed_microclimate"),
+    "94118": ("Richmond District, San Francisco", "coastal"),
+    "94121": ("Outer Richmond, San Francisco", "coastal"),
+    "94122": ("Sunset District, San Francisco", "coastal"),
+    "94123": ("Marina District, San Francisco", "mixed_microclimate"),
+    "94124": ("Bayview, San Francisco", "sunbelt"),
+    "94127": ("West Portal / St. Francis Wood, San Francisco", "mixed_microclimate"),
+    "94131": ("Noe Valley / Glen Park, San Francisco", "sunbelt"),
+    "94133": ("North Beach / Telegraph Hill, San Francisco", "mixed_microclimate"),
+    "94134": ("Visitacion Valley, San Francisco", "sunbelt"),
     "sunset": ("Sunset District, San Francisco", "coastal"),
     "richmond": ("Richmond District, San Francisco", "coastal"),
     "outer sunset": ("Outer Sunset, San Francisco", "coastal"),
@@ -33,11 +51,23 @@ SF_ZIP_TO_HOOD: dict[str, tuple[str, str]] = {
     "fidi": ("Financial District, San Francisco", "sunbelt"),
 }
 SF_TIMEZONE = ZoneInfo("America/Los_Angeles")
+
+# SF outfit selection is intentionally densest around normal local weather:
+# 52-72F is the common usable band, 52-74F is a practical annual average span,
+# and 63F is the canonical "bring a layer" center. Buckets are narrowest around
+# that center, then expand toward rare cold/hot tails. Provider truth still wins:
+# feels-like temp chooses the bucket, while actual rain, precip chance, fog, wind,
+# snow, and description/weather-code conditions route to safer generated outfits.
 TEMPERATURE_BUCKETS = (
     ("very_cold", float("-inf"), 48),
-    ("cold", 48, 51),
-    ("low_50s", 51, 54),
-    ("mid_50s", 54, 57),
+    ("cold", 48, 50),
+    ("around_50", 50, 51),
+    ("temp_51_to_52", 51, 52),
+    ("temp_52_to_53", 52, 53),
+    ("temp_53_to_54", 53, 54),
+    ("temp_54_to_55", 54, 55),
+    ("temp_55_to_56", 55, 56),
+    ("temp_56_to_57", 56, 57),
     ("upper_50s", 57, 59),
     ("low_60s", 59, 61),
     ("early_60s", 61, 62),
@@ -77,218 +107,25 @@ WEATHER_CODE_TO_DERIVED_CONDITION = {
 BUCKET_NOTES = {
     "very_cold": "Very cold; use the warmest outfit you have",
     "cold": "Cold; don't forget to layer up",
-    "low_50s": "Low 50s; use a real layer",
-    "mid_50s": "Mid-50s; dress like cool weather with a backup layer",
+    "around_50": "Around 50; use a real cold-weather layer",
+    "temp_51_to_52": "Low 50s; use a real layer",
+    "temp_52_to_53": "Low 50s; use a real layer",
+    "temp_53_to_54": "Low 50s; use a real layer",
+    "temp_54_to_55": "Mid-50s; dress like cool weather with a backup layer",
+    "temp_55_to_56": "Mid-50s; dress like cool weather with a backup layer",
+    "temp_56_to_57": "High 50s; a backup layer still helps",
     "upper_50s": "Upper 50s; a hoodie, cardigan, or light jacket is the safe default",
     "low_60s": "Low 60s; keep a light jacket or cardigan on",
-    "early_60s": "Early 60s; light layers still work best",
+    "early_60s": "Low 60s; light layers still work best",
     "low_mid_60s": "Low-mid 60s; a very light cardigan works.",
     "mid_60s": "Mid-60s; use a real light layer",
     "upper_60s": "Upper 60s; use a removable light layer",
     "near_70": "Near 70; short sleeves can work, but keep SF shifts in mind",
-    "low_70s": "Low 70s; lighter clothing works unless fog, rain, or wind happens soon",
-    "warm_low_70s": "Low 70s; lighter clothing works unless fog, rain, or wind happens soon",
+    "low_70s": "Low 70s; lighter clothing works unless fog, rain, or wind happens soon.",
+    "warm_low_70s": "Low 70s; lighter clothing works unless fog, rain, or wind happens soon.",
     "warm_mid_70s": "Mid-70s; dress light",
     "hot": "Hot; use the lightest warm-weather outfit.",
     "very_hot": "Very hot; prioritize breathable clothing and water.",
-}
-WEATHER_OUTFIT_PRESETS = {
-    "very_hot_weather_in_a_warm_neighborhood": [
-        "static/assets/prepared/approved/tank_top_teal.png",
-        "static/assets/prepared/approved/shorts_blue_sweat_mini.png",
-        "static/assets/prepared/approved/accessory_leather_handbag.png",
-        "static/assets/prepared/approved/accessory_stanley_cup.png",
-    ],
-    "very_hot_weather_near_the_coast_or_bay": [
-        "static/assets/prepared/approved/dress_long_white_blue_flower.png",
-        "static/assets/prepared/approved/accessory_birkenstock_sandals.png",
-        "static/assets/prepared/approved/accessory_pink_handbag.png",
-    ],
-    "hot_weather_in_a_warm_neighborhood": [
-        "static/assets/prepared/approved/tank_top_grey_camisole.png",
-        "static/assets/prepared/approved/jean_shorts_summer_mini.png",
-        "static/assets/prepared/approved/accessory_leather_handbag.png",
-        "static/assets/prepared/approved/accessory_stanley_cup.png",
-    ],
-    "hot_weather_near_the_coast_or_bay": [
-        "static/assets/prepared/approved/tank_top_spaghetti_strap_blue_baby_doll.png",
-        "static/assets/prepared/approved/short_jean_mini_skirt.png",
-        "static/assets/prepared/approved/accessory_pink_handbag.png",
-    ],
-    "warm_weather_in_a_warm_neighborhood": [
-        "static/assets/prepared/approved/blue_off_shoulder_top.png",
-        "static/assets/prepared/approved/jeans_light_straight.png",
-        "static/assets/prepared/approved/accessory_stanley_cup.png",
-    ],
-    "warm_weather_near_the_bay": [
-        "static/assets/prepared/approved/t_shirt_fitted_yellow_striped.png",
-        "static/assets/prepared/approved/jeans_pale_fitted_waist_baggy.png",
-    ],
-    "mild_weather_in_a_warm_neighborhood": [
-        "static/assets/prepared/approved/tank_top_red.png",
-        "static/assets/prepared/approved/white_zip_up_cardigan_brandy.png",
-        "static/assets/prepared/approved/jeans_loose_with_folded_hems.png",
-        "static/assets/prepared/approved/accessory_leather_handbag.png",
-    ],
-    "early_60s_weather_and_dry": [
-        "static/assets/prepared/approved/top_vneck_white_brandy_melville.png",
-        "static/assets/prepared/approved/white_zip_up_cardigan_brandy.png",
-        "static/assets/prepared/approved/jeans_oversized_black_barrel_leg.png",
-        "static/assets/prepared/approved/accessory_samba_sneakers.png",
-    ],
-    "mild_weather_near_the_bay": [
-        "static/assets/prepared/approved/blue_button_up_blouse_brandy_melville.png",
-        "static/assets/prepared/approved/jeans_light_straight.png",
-        "static/assets/prepared/approved/accessory_pink_handbag.png",
-    ],
-    "mild_weather_near_the_coast_with_wind_condition": [
-        "static/assets/prepared/approved/tank_top_red.png",
-        "static/assets/prepared/approved/white_zip_up_cardigan_brandy.png",
-        "static/assets/prepared/approved/jeans_light_straight.png",
-    ],
-    "mild_weather_near_the_coast_with_fog_condition": [
-        "static/assets/prepared/approved/hoodie_pullover_plain_white.png",
-        "static/assets/prepared/approved/jeans_loose_with_folded_hems.png",
-        "static/assets/prepared/approved/accessory_pink_handbag.png",
-    ],
-    "mild_weather_near_the_bay_with_wind_condition": [
-        "static/assets/prepared/approved/top_polka_dot_yellow_off_shoulder.png",
-        "static/assets/prepared/approved/white_zip_up_cardigan_brandy.png",
-        "static/assets/prepared/approved/jeans_long_loose_shorts_uo.png",
-        "static/assets/prepared/approved/accessory_black_school_backpack.png",
-    ],
-    "cool_weather_with_fog_or_wind_condition": [
-        "static/assets/prepared/approved/t_shirt_fitted_yellow_striped.png",
-        "static/assets/prepared/approved/hoodie_pullover_plain_white.png",
-        "static/assets/prepared/approved/jacket_fur_brown.png",
-        "static/assets/prepared/approved/sweatpants_red.png",
-    ],
-    "cool_weather_near_the_bay_or_coast": [
-        "static/assets/prepared/approved/blue_button_up_blouse_brandy_melville.png",
-        "static/assets/prepared/approved/white_zip_up_cardigan_brandy.png",
-        "static/assets/prepared/approved/jeans_loose_with_folded_hems.png",
-    ],
-    "cold_weather_and_dry": [
-        "static/assets/prepared/approved/grey_long_sleeve_top_fitted.png",
-        "static/assets/prepared/approved/jeans_oversized_black_barrel_leg.png",
-        "static/assets/prepared/approved/accessory_pink_beanie_uo.jpg",
-        "static/assets/prepared/approved/accessory_folded_polka_dot_umbrella.png",
-    ],
-    "54_to_56_degree_weather_and_dry": [
-        "static/assets/prepared/approved/casual_sweats_and_tee.png",
-        "static/assets/prepared/approved/grey_long_sleeve_top_fitted.png",
-        "static/assets/prepared/approved/accessory_pink_beanie_uo.jpg",
-    ],
-    "cold_weather_with_wind_condition": [
-        "static/assets/prepared/approved/jacket_white_puffer_fitted_waist.png",
-        "static/assets/prepared/approved/jeans_uo_camo_baggy_pants.png",
-        "static/assets/prepared/approved/accessory_pink_beanie_uo.jpg",
-    ],
-    "very_cold_weather_and_dry": [
-        "static/assets/prepared/approved/jacket_white_puffer_fitted_waist.png",
-        "static/assets/prepared/approved/jeans_uo_camo_baggy_pants.png",
-        "static/assets/prepared/approved/accessory_dark_blue_beanie.png",
-        "static/assets/prepared/approved/accessory_black_school_backpack.png",
-    ],
-    "very_cold_weather_with_wind_condition": [
-        "static/assets/prepared/approved/grey_long_sleeve_top_fitted.png",
-        "static/assets/prepared/approved/white_zip_up_cardigan_brandy.png",
-        "static/assets/prepared/approved/jacket_fur_brown.png",
-        "static/assets/prepared/approved/jeans_oversized_black_barrel_leg.png",
-        "static/assets/prepared/approved/accessory_dark_blue_beanie.png",
-    ],
-    "mild_weather_and_wet_raining": [
-        "static/assets/prepared/approved/blue_off_shoulder_top.png",
-        "static/assets/prepared/approved/hoodie_pullover_plain_white.png",
-        "static/assets/prepared/approved/long_rain_jacket_outerwear.png",
-        "static/assets/prepared/approved/jeans_light_straight.png",
-        "static/assets/prepared/approved/accessory_polka_dot_black_umbrella.png",
-    ],
-    "cold_weather_and_wet_raining": [
-        "static/assets/prepared/approved/grey_long_sleeve_top_fitted.png",
-        "static/assets/prepared/approved/white_zip_up_cardigan_brandy.png",
-        "static/assets/prepared/approved/north_face_puffy_vest.png",
-        "static/assets/prepared/approved/jeans_uo_camo_baggy_pants.png",
-        "static/assets/prepared/approved/accessory_polka_dot_black_umbrella.png",
-    ],
-    "mild_weather_and_wet_drizzling": [
-        "static/assets/prepared/approved/blue_off_shoulder_top.png",
-        "static/assets/prepared/approved/white_zip_up_cardigan_brandy.png",
-        "static/assets/prepared/approved/long_rain_jacket_outerwear.png",
-        "static/assets/prepared/approved/jeans_loose_with_folded_hems.png",
-        "static/assets/prepared/approved/accessory_folded_polka_dot_umbrella.png",
-    ],
-    "cool_weather_and_wet_windy_drizzle": [
-        "static/assets/prepared/approved/t_shirt_fitted_yellow_striped.png",
-        "static/assets/prepared/approved/hoodie_pullover_plain_white.png",
-        "static/assets/prepared/approved/north_face_puffy_vest.png",
-        "static/assets/prepared/approved/sweatpants_red.png",
-        "static/assets/prepared/approved/accessory_ugg_mini_boots.png",
-    ],
-    "warm_weather_and_wet_raining": [
-        "static/assets/prepared/approved/blue_button_up_blouse_brandy_melville.png",
-        "static/assets/prepared/approved/hoodie_pullover_plain_white.png",
-        "static/assets/prepared/approved/long_rain_jacket_outerwear.png",
-        "static/assets/prepared/approved/jeans_pale_fitted_waist_baggy.png",
-        "static/assets/prepared/approved/accessory_polka_dot_black_umbrella.png",
-    ],
-    "cool_weather_and_wet_raining": [
-        "static/assets/prepared/approved/grey_long_sleeve_top_fitted.png",
-        "static/assets/prepared/approved/white_zip_up_cardigan_brandy.png",
-        "static/assets/prepared/approved/jacket_puffer_with_tan_undershirt.png",
-        "static/assets/prepared/approved/jeans_oversized_black_barrel_leg.png",
-        "static/assets/prepared/approved/accessory_polka_dot_black_umbrella.png",
-    ],
-    "cold_weather_and_wet_storming": [
-        "static/assets/prepared/approved/t_shirt_fitted_yellow_striped.png",
-        "static/assets/prepared/approved/hoodie_pullover_plain_white.png",
-        "static/assets/prepared/approved/jacket_puffer_with_tan_undershirt.png",
-        "static/assets/prepared/approved/jeans_uo_camo_baggy_pants.png",
-        "static/assets/prepared/approved/accessory_open_black_umbrella.png",
-    ],
-    "cold_weather_and_wet_rainstorm": [
-        "static/assets/prepared/approved/grey_long_sleeve_top_fitted.png",
-        "static/assets/prepared/approved/white_zip_up_cardigan_brandy.png",
-        "static/assets/prepared/approved/jacket_puffer_with_tan_undershirt.png",
-        "static/assets/prepared/approved/jeans_oversized_black_barrel_leg.png",
-        "static/assets/prepared/approved/accessory_open_black_umbrella.png",
-    ],
-    "warm_clear_weather_in_a_warm_neighborhood": [
-        "static/assets/prepared/approved/dress_white_strapless.png",
-        "static/assets/prepared/approved/accessory_leather_handbag.png",
-    ],
-    "warm_clear_weather_near_the_bay": [
-        "static/assets/prepared/approved/dress_red_long_with_slit.png",
-        "static/assets/prepared/approved/accessory_pink_handbag.png",
-    ],
-    "warm_clear_weather_near_the_coast": [
-        "static/assets/prepared/approved/dress_long_pale_yellow_red_flower.png",
-        "static/assets/prepared/approved/accessory_pink_handbag.png",
-    ],
-    "warm_light_weather_in_a_warm_neighborhood": [
-        "static/assets/prepared/approved/tank_top_red.png",
-        "static/assets/prepared/approved/skirt_white_flowy_knee_length.png",
-        "static/assets/prepared/approved/accessory_leather_handbag.png",
-        "static/assets/prepared/approved/accessory_stanley_cup.png",
-    ],
-    "warm_light_weather_near_the_bay": [
-        "static/assets/prepared/approved/tank_top_light_blue_flower_pattern.png",
-        "static/assets/prepared/approved/jeans_long_loose_shorts_uo.png",
-        "static/assets/prepared/approved/accessory_pink_handbag.png",
-    ],
-    "warm_light_weather_near_the_coast": [
-        "static/assets/prepared/approved/top_polka_dot_yellow_off_shoulder.png",
-        "static/assets/prepared/approved/jeans_light_straight.png",
-    ],
-    "warm_clear_light_weather_in_a_warm_neighborhood": [
-        "static/assets/prepared/approved/dress_strapless_polka_dot.png",
-        "static/assets/prepared/approved/accessory_leather_handbag.png",
-        "static/assets/prepared/approved/accessory_stanley_cup.png",
-    ],
-    "warm_clear_light_weather_near_the_bay": [
-        "static/assets/prepared/approved/dress_tan_patterned_sheath.png",
-        "static/assets/prepared/approved/accessory_pink_handbag.png",
-    ],
 }
 
 
@@ -300,13 +137,21 @@ def selected_weather_preset_key(context: OutfitWeatherContext) -> str:
     temp = context.effective_temp_f
 
     if rain_level == "storm":
-        return (
-            "cold_weather_and_wet_rainstorm"
-            if bucket == "very_cold"
-            else "cold_weather_and_wet_storming"
-        )
+        if bucket == "very_cold" and conditions & {"snow", "wind", "fog"}:
+            return "very_cold_weather_and_wet_snow_or_windstorm"
+        return "cold_weather_and_wet_rainstorm" if bucket == "very_cold" else "cold_weather_and_wet_storming"
     if rain_level == "rain":
-        if bucket in {"very_cold", "cold", "low_50s", "mid_50s"}:
+        if bucket in {
+            "very_cold",
+            "cold",
+            "around_50",
+            "temp_51_to_52",
+            "temp_52_to_53",
+            "temp_53_to_54",
+            "temp_54_to_55",
+            "temp_55_to_56",
+            "temp_56_to_57",
+        }:
             return "cold_weather_and_wet_raining"
         if bucket in {"upper_50s", "low_60s"}:
             return "cool_weather_and_wet_raining"
@@ -318,7 +163,20 @@ def selected_weather_preset_key(context: OutfitWeatherContext) -> str:
     if rain_level == "drizzle":
         return (
             "cool_weather_and_wet_windy_drizzle"
-            if bucket in {"very_cold", "cold", "low_50s", "mid_50s", "upper_50s", "low_60s"}
+            if bucket
+            in {
+                "very_cold",
+                "cold",
+                "around_50",
+                "temp_51_to_52",
+                "temp_52_to_53",
+                "temp_53_to_54",
+                "temp_54_to_55",
+                "temp_55_to_56",
+                "temp_56_to_57",
+                "upper_50s",
+                "low_60s",
+            }
             else "mild_weather_and_wet_drizzling"
         )
     if bucket == "very_hot":
@@ -381,7 +239,7 @@ def selected_weather_preset_key(context: OutfitWeatherContext) -> str:
             if conditions & {"fog", "wind"}
             else "cool_weather_near_the_bay_or_coast"
         )
-    if bucket == "mid_50s":
+    if bucket in {"temp_54_to_55", "temp_55_to_56", "temp_56_to_57"}:
         return "cold_weather_with_wind_condition" if conditions & {"fog", "wind"} else "54_to_56_degree_weather_and_dry"
     if bucket == "upper_50s":
         return (
@@ -389,12 +247,20 @@ def selected_weather_preset_key(context: OutfitWeatherContext) -> str:
             if conditions & {"fog", "wind"}
             else "cool_weather_near_the_bay_or_coast"
         )
-    if bucket in {"cold", "low_50s"}:
+    if bucket in {"cold", "around_50", "temp_51_to_52", "temp_52_to_53", "temp_53_to_54"}:
         if conditions & {"fog", "wind"}:
-            return "cold_weather_with_wind_condition"
+            return (
+                "50_to_51_degree_weather_with_wind_condition" if 50 <= temp < 51 else "cold_weather_with_wind_condition"
+            )
+        if "wet" in conditions and 50 <= temp < 50.5:
+            return "50_to_51_degree_weather_dry_high_precipitation"
         if 50 <= temp < 51:
             return "cold_weather_with_wind_condition"
-        return "cold_weather_and_dry" if temp < 51 else "54_to_56_degree_weather_and_dry"
+        if temp < 51:
+            return "cold_weather_and_dry"
+        if 51 <= temp < 54:
+            return "51_to_54_degree_weather_and_dry"
+        return "cold_weather_and_dry"
     return "very_cold_weather_with_wind_condition" if conditions & {"fog", "wind"} else "very_cold_weather_and_dry"
 
 
@@ -411,8 +277,8 @@ def get_outfit(
 
 def display_location_name(fallback_name: str, query: str) -> str:
     """Return a concise SF display name from known ZIP/neighborhood aliases."""
-    normalized_query = " ".join(query.strip().split()).casefold()
-    return next((label for alias, (label, _zone) in SF_ZIP_TO_HOOD.items() if alias in normalized_query), fallback_name)
+    haystack = " ".join(f"{query} {fallback_name}".strip().split()).casefold()
+    return next((label for alias, (label, _zone) in SF_ZIP_TO_HOOD.items() if alias in haystack), fallback_name)
 
 
 def interpret_weather_for_messaging_and_outfit_selection(

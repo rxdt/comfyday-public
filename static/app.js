@@ -10,6 +10,7 @@ const elements = {
   rainChance: document.getElementById("rain-chance"),
   weatherKind: document.getElementById("weather-kind"),
   description: document.getElementById("description"),
+  weatherTitlePrefix: document.getElementById("weather-title-prefix"),
   windFragment: document.getElementById("wind-fragment"),
   outfitNote: document.getElementById("outfit-note"),
   statusLine: document.getElementById("status-line"),
@@ -21,10 +22,6 @@ const elements = {
 };
 
 let currentScene = null;
-
-function poseForApi() {
-  return "auto";
-}
 
 function applyLayerFit(img, fit) {
   const style = img.style;
@@ -117,6 +114,12 @@ function renderScene(scene) {
   if (elements.locationLabel) {
     elements.locationLabel.textContent = scene.location_name || "San Francisco";
   }
+  if (elements.weatherTitlePrefix) {
+    elements.weatherTitlePrefix.textContent =
+      scene.hours_ahead === 0
+        ? "Current weather in"
+        : `Forecast weather in ${scene.hours_ahead} hour${scene.hours_ahead === 1 ? "" : "s"} for`;
+  }
   const temperature = Number(scene.temperature_f).toFixed(0);
   const feelsLike =
     scene.feels_like_f === undefined || scene.feels_like_f === null
@@ -143,14 +146,12 @@ function renderScene(scene) {
   renderLayers(scene);
 }
 
-async function loadScene(hoursAhead, query, basePose) {
+async function loadScene(hoursAhead, query) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 12000);
   try {
-    const pose = basePose !== undefined && basePose !== null && basePose !== "" ? basePose : poseForApi();
     const params = new URLSearchParams({
       hours_ahead: String(hoursAhead),
-      base_pose: pose,
     });
     if (query && query.trim()) {
       params.set("query", query.trim());
