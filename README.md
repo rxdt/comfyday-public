@@ -11,7 +11,7 @@
 ![FLUX](https://img.shields.io/badge/FLUX-static_outfits-ff69b4?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-public_demo-8A2BE2?style=for-the-badge)
 
-Comfyday checks the weather for a ZIP/place, interprets the conditions, and chooses a pre-generated outfit image that fits the moment.
+Comfyday checks the weather for a ZIP/place, interprets the conditions, maps that weather to a pre-generated FLUX outfit image, and renders one fixed model responsively.
 
 ```text
 weather now + hours ahead
@@ -28,6 +28,7 @@ static FLUX image
 | Feature | Why It Matters |
 | --- | --- |
 | 🌦️ Weather-aware outfits | Uses current/forecast weather instead of a fixed outfit. |
+| 📍 ZIP/place search | Try a ZIP, neighborhood, or city and check weather up to 24 hours ahead. |
 | 🧊 Tight SF-style temp buckets | Most logic is tuned around the common `50s-70s°F` range. |
 | 💨 Provider-based wind/fog/rain | No fake weather guesses; provider data drives outfit changes. |
 | 🖼️ Static generated looks | Runtime is fast because it only selects pre-rendered images. |
@@ -46,12 +47,13 @@ This public repo excludes the full private generated outfit library. These scree
 
 | Layer | Files | Job |
 | --- | --- | --- |
-| HTTP runtime | `main.py` | FastAPI routes, Jinja shell, static file serving |
-| Weather orchestration | `weather_service.py` | Geocoding, provider choice, cache fallback |
+| Backend | `main.py` | FastAPI routes, Jinja shell, static file serving |
+| Weather | `weather_service.py` | Tomorrow.io first, Weatherstack fallback, geocoding, cache fallback |
 | Provider normalization | `weather_api.py` | Tomorrow.io / Weatherstack → one `WeatherSnapshot` |
 | Outfit selection | `outfit_logic.py` | Temp bucket + rain/fog/wind → preset key |
 | Scene payload | `scene_builder.py` | One static image URL + compact weather text |
 | Browser UI | `static/app.js`, `static/styles.css` | Fetch scene JSON and render responsively |
+| Generation ops | `scripts/run_replicate.py` | Optional offline reruns for bad FLUX outputs |
 
 ```text
 main.py
@@ -155,6 +157,13 @@ WEATHERSTACK_API_KEY=...
 ```
 
 The Replicate key is only for offline image generation and should not be needed by the runtime app.
+
+Local-only optional defaults:
+
+```bash
+WEATHER_QUERY=94110
+COMFY_REPLICATE_API_KEY=...
+```
 
 ## 🎨 Regenerating Outfit Images
 
