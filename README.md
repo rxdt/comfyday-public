@@ -167,7 +167,7 @@ COMFY_REPLICATE_API_KEY=...
 
 ## 🎨 Regenerating Outfit Images
 
-The private workflow uses **Replicate** with **Black Forest Labs FLUX.2 Pro** to regenerate static outfit images:
+The private workflow uses **Replicate** with [**Black Forest Labs FLUX.2 Pro**](https://replicate.com/black-forest-labs/flux-2-pro) to regenerate static outfit images:
 
 ```bash
 uv sync --group generate
@@ -190,6 +190,14 @@ Generation env var, private/offline only:
 ```bash
 COMFY_REPLICATE_API_KEY=...
 ```
+
+Why this model/path:
+
+- Strong image-edit quality for full-body fashion renders.
+- Accepts multiple reference images: base model plus clothing/accessory assets.
+- Good enough identity/style preservation for a small static catalog.
+- Fast to iterate through Replicate without running a local GPU worker.
+- Keeps production simple: the deployed app serves static PNGs and never calls the model at runtime.
 
 ## 💅 Why Static Images?
 
