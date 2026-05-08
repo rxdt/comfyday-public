@@ -1,6 +1,9 @@
 # 🌈 Comfyday
 
-> **A tiny weather-to-outfit app for “what do I wear right now?” days.**
+
+###   💜💛💙💚❤️
+
+> **For Saoirse - A tiny weather-to-outfit app for “what do I wear right now?” days**
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-weather_API-009688?style=for-the-badge&logo=fastapi&logoColor=white)
@@ -41,6 +44,15 @@ This public repo excludes the full private generated outfit library. These scree
 
 ## 🧠 Architecture
 
+| Layer | Files | Job |
+| --- | --- | --- |
+| HTTP runtime | `main.py` | FastAPI routes, Jinja shell, static file serving |
+| Weather orchestration | `weather_service.py` | Geocoding, provider choice, cache fallback |
+| Provider normalization | `weather_api.py` | Tomorrow.io / Weatherstack → one `WeatherSnapshot` |
+| Outfit selection | `outfit_logic.py` | Temp bucket + rain/fog/wind → preset key |
+| Scene payload | `scene_builder.py` | One static image URL + compact weather text |
+| Browser UI | `static/app.js`, `static/styles.css` | Fetch scene JSON and render responsively |
+
 ```text
 main.py
   FastAPI routes + static frontend
@@ -60,6 +72,30 @@ scene_builder.py
 static/app.js + static/styles.css
   tiny frontend renderer
 ```
+
+## 🔁 Runtime Flow
+
+```text
+ZIP/place + hours ahead
+  -> weather_service.py
+  -> weather_api.py provider normalization
+  -> outfit_logic.py preset selection
+  -> scene_builder.py one-image scene
+  -> frontend renders /static/generated/flux2/<preset>.png
+```
+
+The live app does **not** run image generation, virtual try-on, or clothing compositing at request time.
+
+## 🌦️ Weather Inputs
+
+| Signal | Used For |
+| --- | --- |
+| `temperature` | display temperature |
+| `temperatureApparent` / feels-like | outfit bucket selection |
+| precipitation intensity/probability | drizzle/rain/storm routing |
+| weather code + description | fog, cloud, rain, snow labels |
+| wind speed/gust | breezy/windy labels + wind-specific outfits |
+| local forecast hour | “right now” vs “N hours from now” display |
 
 ## 🚫 What This Public Demo Excludes
 
@@ -98,7 +134,27 @@ uv sync --group dev
 PYTHONPATH=. uv run pytest -q
 ```
 
+Private-repo tests cover:
+
+- API payload contracts
+- provider normalization
+- no-network weather edge cases
+- preset reachability
+- generated-image coverage
+- FLUX rerun-script safety
+
 Note: image-coverage tests expect private generated images. For the public repo, either add safe placeholder images or skip those private-asset checks.
+
+## 🚀 Deploy Notes
+
+Production needs weather provider secrets:
+
+```bash
+TOMORROW_API_KEY=...
+WEATHERSTACK_API_KEY=...
+```
+
+The Replicate key is only for offline image generation and should not be needed by the runtime app.
 
 ## 🎨 Regenerating Outfit Images
 
