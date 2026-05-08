@@ -30,11 +30,14 @@ static FLUX image
 | 🖼️ Static generated looks | Runtime is fast because it only selects pre-rendered images. |
 | 📱 Responsive frontend | Built to fit the model + text on desktop and mobile. |
 
-## 📸 Screenshot
+## 📸 Screenshots
 
-![Comfyday app screenshot](docs/app-screenshot.png)
+<p align="center">
+  <img src="docs/app-screenshot.png" alt="Comfyday cool weather outfit screenshot" width="360">
+  <img src="docs/app-screenshot-warm.png" alt="Comfyday warm weather outfit screenshot" width="360">
+</p>
 
-This public repo excludes the full private generated outfit library. The screenshot is included to show the product experience.
+This public repo excludes the full private generated outfit library. These screenshots show the product experience with static weather-matched outfit renders.
 
 ## 🧠 Architecture
 
