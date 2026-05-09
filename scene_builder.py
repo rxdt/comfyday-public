@@ -10,7 +10,7 @@ from outfit_logic import display_location_name, get_outfit, interpret_weather_fo
 
 FRONT_POSE_ID = "front"
 BASE_IMAGE_URL = "/static/assets/base/girl-real-pose-front.png"
-FALLBACK_FLUX_IMAGE_URL = "/static/generated/flux2/mild_weather_near_the_bay.png"
+FALLBACK_FLUX_IMAGE_URL = "/static/generated/flux2/64_to_65_dry_light_layer.png"
 
 
 def existing_static_image_url(url: str) -> str:
@@ -51,18 +51,9 @@ def build_scene(
     changed = not previous or current_signature != previous.signature()
     if changed:
         version += 1
-    location_query = " ".join(
-        part
-        for part in (
-            snapshot.query,
-            resolved_location.query if resolved_location else "",
-            resolved_location.display_name if resolved_location else "",
-        )
-        if part
-    )
     return SceneState(
         version=version,
-        location_name=display_location_name(snapshot.location_name, location_query),
+        location_name=display_location_name(snapshot.location_name, resolved_location.query if resolved_location else snapshot.query),
         query=snapshot.query,
         weather_latitude=resolved_location.latitude if resolved_location else None,
         weather_longitude=resolved_location.longitude if resolved_location else None,

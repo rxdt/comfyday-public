@@ -11,12 +11,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from weather_service import WeatherSceneService
+from weather_service import WeatherSceneService, request_country_hint
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
-MAX_FORECAST_HOURS = 24
+MAX_FORECAST_HOURS = 168
 
 
 load_dotenv(BASE_DIR / ".env")
@@ -43,22 +43,22 @@ async def index(request: Request):
 
 @app.get("/api/scene")
 async def get_scene(
+    request: Request,
     hours_ahead: int = Query(default=0, ge=0, le=MAX_FORECAST_HOURS),
-    query: str | None = Query(default=None, min_length=1, max_length=120),
+    query: str | None = Query(default=None, min_length=5, max_length=5, pattern=r"^\d{5}$"),
 ):
     """Return the current or forecast scene payload."""
     try:
-        return JSONResponse((await scene_service.get_scene(hours_ahead, query=query)).to_dict())
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@app.get("/api/locations")
-async def resolve_locations(q: str = Query(..., min_length=1, max_length=200)):
-    """Resolve a freeform place string to coordinates and concise labels."""
-    try:
-        return JSONResponse((await scene_service.resolve_location(q)).to_dict())
+        return JSONResponse(
+            (
+                await scene_service.get_scene(
+                    hours_ahead,
+                    query=query,
+                    country_hint=request_country_hint(dict(request.headers)),
+                )
+            ).to_dict()
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

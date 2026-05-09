@@ -1,0 +1,285 @@
+:root {
+  color-scheme: light;
+  font-family: Arial, sans-serif;
+  --text: #111111;
+  --muted: #555555;
+  --last-updated-text: #9a9a9a;
+  --line: #d9d9d9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #ffffff;
+  color: var(--text);
+}
+
+.page {
+  min-height: 100svh;
+  padding: 4px 16px 10px;
+}
+
+.content {
+  max-width: 640px;
+  min-height: calc(100svh - 14px);
+  margin: 0 auto;
+}
+
+.model-row {
+  position: relative;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.scene-stage {
+  position: relative;
+  width: min(92vw, 516px);
+  height: clamp(600px, 77svh, 816px);
+  margin: 8px auto 4px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.base-photo,
+.scene-layer-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center center;
+}
+
+.scene-layer-image {
+  pointer-events: none;
+}
+
+.base-photo.is-hidden,
+.scene-layer-image.is-hidden,
+.missing-base.is-hidden {
+  display: none;
+}
+
+.missing-base {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.scene-layers {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.weather-block {
+  text-align: center;
+  margin-bottom: 5px;
+}
+
+.weather-title,
+.weather-info,
+.weather-subcopy,
+.weather-outfit-note,
+.status-line {
+  margin: 0 0 4px;
+}
+
+.weather-title,
+.weather-info,
+.weather-outfit-note {
+  line-height: 1.1;
+}
+
+.weather-title {
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.weather-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 0;
+}
+
+.weather-form-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  width: 100%;
+  max-width: 440px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.weather-form-row input[type="number"],
+.weather-form-row input[type="text"] {
+  width: 72px;
+  min-height: 28px;
+  padding: 0 8px;
+  text-align: center;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+}
+
+.weather-form-row input[type="text"] {
+  width: 150px;
+}
+
+.weather-form-row button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.weather-info {
+  font-size: 0.96rem;
+  white-space: nowrap;
+}
+
+.weather-subcopy,
+.weather-outfit-note,
+.status-line {
+  color: var(--muted);
+}
+
+.weather-outfit-note {
+  font-size: 0.95rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+@media (max-width: 389px) {
+  .weather-info,
+  .weather-outfit-note {
+    white-space: normal;
+  }
+}
+
+.weather-last-updated {
+  margin: 0 0 2px;
+  font-size: 0.76rem;
+  color: var(--last-updated-text);
+}
+
+.separator {
+  margin: 0 4px;
+}
+
+.time-prompt {
+  font-size: 0.82rem;
+}
+
+.github-link {
+  position: absolute;
+  right: -34px;
+  bottom: 8px;
+  z-index: 5;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: #111111;
+  opacity: 0.78;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.github-link:hover,
+.github-link:focus-visible {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.github-link svg {
+  width: 22px;
+  height: 22px;
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding: 4px 10px 8px;
+  }
+
+  .content {
+    min-height: calc(100svh - 12px);
+  }
+
+  .scene-stage {
+    width: min(92vw, 456px);
+    height: clamp(468px, 70svh, 672px);
+    min-height: 0;
+  }
+
+  .github-link {
+    right: 4px;
+    bottom: 8px;
+  }
+}
+
+@media (max-height: 760px) {
+  .scene-stage {
+    height: clamp(456px, 70svh, 600px);
+    min-height: 0;
+  }
+
+  .weather-title,
+  .weather-info,
+  .weather-subcopy,
+  .weather-outfit-note,
+  .status-line {
+    margin-bottom: 3px;
+  }
+}
+
+@media (min-height: 900px) {
+  .scene-stage {
+    height: min(79svh, 840px);
+  }
+}
+
+@media (max-width: 430px) {
+  .scene-stage {
+    width: min(92vw, 408px);
+    height: clamp(432px, 67svh, 600px);
+  }
+
+  .weather-form-row {
+    font-size: 0.78rem;
+    gap: 4px;
+  }
+
+  .weather-form-row input[type="text"] {
+    width: 128px;
+  }
+
+  .github-link {
+    right: 6px;
+    bottom: 6px;
+    width: 26px;
+    height: 26px;
+  }
+
+  .github-link svg {
+    width: 20px;
+    height: 20px;
+  }
+}

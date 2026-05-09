@@ -64,9 +64,9 @@ class BackendRuntimeTests(unittest.TestCase):
 
     def test_sf_zip_map_contains_requested_labels(self) -> None:
         """Known SF ZIPs should map to stable neighborhood display labels."""
-        self.assertEqual(SF_ZIP_TO_HOOD["94110"][0], "Inner Mission, Bernal Heights, San Francisco")
+        self.assertEqual(SF_ZIP_TO_HOOD["94110"][0], "Mission District, San Francisco")
         self.assertEqual(SF_ZIP_TO_HOOD["94113"][0], "Glen Park, San Francisco")
-        self.assertEqual(SF_ZIP_TO_HOOD["94122"][0], "Sunset, Inner Sunset, San Francisco")
+        self.assertEqual(SF_ZIP_TO_HOOD["94122"][0], "Inner Sunset, San Francisco")
         self.assertEqual(SF_ZIP_TO_HOOD["94143"][0], "UC San Francisco, San Francisco")
         self.assertEqual(SF_ZIP_TO_HOOD["94158"][0], "Mission Bay, San Francisco")
 
@@ -83,7 +83,7 @@ class BackendRuntimeTests(unittest.TestCase):
         """Location labels should stay compact without losing useful country context."""
         self.assertEqual(
             concise_location_label("San Francisco, California, United States", query="94110"),
-            "Inner Mission, Bernal Heights, San Francisco",
+            "Mission District, San Francisco",
         )
         self.assertEqual(concise_location_label("Portland, Oregon, United States", query="97205"), "Portland, Oregon")
         self.assertEqual(concise_location_label("San Jose, California, United States", query="95112"), "San Jose")
@@ -101,11 +101,11 @@ class BackendRuntimeTests(unittest.TestCase):
         """Display labels should come from the SF ZIP map, not raw provider strings."""
         self.assertEqual(
             display_location_name("94122, San Francisco", "94122"),
-            "Sunset, Inner Sunset, San Francisco",
+            "Inner Sunset, San Francisco",
         )
         self.assertEqual(
             display_location_name("94110, San Francisco", "94110"),
-            "Inner Mission, Bernal Heights, San Francisco",
+            "Mission District, San Francisco",
         )
         self.assertEqual(
             display_location_name("94113, San Francisco", "94113"),
@@ -401,7 +401,7 @@ class BackendRuntimeTests(unittest.TestCase):
         )
         location = LocationRecord(
             query="94122",
-            display_name="Sunset, Inner Sunset, San Francisco",
+            display_name="Inner Sunset, San Francisco",
             latitude=37.7599,
             longitude=-122.4148,
             timezone="America/Los_Angeles",
@@ -413,7 +413,7 @@ class BackendRuntimeTests(unittest.TestCase):
             tomorrow_location="37.7599,-122.4148",
         )
         scene = build_scene(snapshot, None, mode="current", hours_ahead=0, resolved_location=location)
-        self.assertEqual(scene.location_name, "Sunset, Inner Sunset, San Francisco")
+        self.assertEqual(scene.location_name, "Inner Sunset, San Francisco")
 
     def test_resolve_weather_location_prefers_us_postcode_match(self) -> None:
         """ZIP geocoding should choose a US row whose postcode list contains the ZIP."""
@@ -460,7 +460,7 @@ class BackendRuntimeTests(unittest.TestCase):
 
         location = asyncio.run(service.resolve_weather_location(FakeClient(), "94110"))
         self.assertEqual(location.country_code, "US")
-        self.assertEqual(location.display_name, "Inner Mission, Bernal Heights, San Francisco")
+        self.assertEqual(location.display_name, "Mission District, San Francisco")
 
     def test_resolve_weather_location_uses_sf_city_fallback_for_94113(self) -> None:
         """Unresolvable SF ZIPs should fall back to a generic San Francisco geocode."""
@@ -681,7 +681,7 @@ class BackendRuntimeTests(unittest.TestCase):
         )
         location = LocationRecord(
             query="94110",
-            display_name="Inner Mission, Bernal Heights, San Francisco",
+            display_name="Mission District, San Francisco",
             latitude=37.7599,
             longitude=-122.4148,
             timezone="America/Los_Angeles",
@@ -702,20 +702,20 @@ class BackendRuntimeTests(unittest.TestCase):
             resolved_location=location,
         )
 
-        async def fail_fetch(_query: str, *, hours_ahead: int):
+        async def fail_fetch(_query: str, *, hours_ahead: int, country_hint: str | None = None):
             raise RuntimeError(f"boom-{hours_ahead}")
 
         service.fetch_weather_bundle = fail_fetch  # type: ignore[method-assign]
         scene = asyncio.run(service.get_scene(0, "94110"))
         self.assertTrue(scene.stale)
-        self.assertEqual(scene.location_name, "Inner Mission, Bernal Heights, San Francisco")
+        self.assertEqual(scene.location_name, "Mission District, San Francisco")
         self.assertTrue(scene.source.endswith("-cache"))
 
     def test_get_scene_raises_when_live_fetch_fails_without_cache(self) -> None:
         """A hard provider failure should bubble up when nothing cached can save the request."""
         service = WeatherSceneService()
 
-        async def fail_fetch(_query: str, *, hours_ahead: int):
+        async def fail_fetch(_query: str, *, hours_ahead: int, country_hint: str | None = None):
             raise RuntimeError(f"boom-{hours_ahead}")
 
         service.fetch_weather_bundle = fail_fetch  # type: ignore[method-assign]

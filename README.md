@@ -1,6 +1,6 @@
 # 🌈 Comfyday
 
-[try it](comfyday.vercel.app)
+**[TRY IT ON HERE](https://comfyday.vercel.app/)**
 
 ###   💜💛💙💚❤️      For Saoirse       💜💛💙💚❤️
 
@@ -12,24 +12,15 @@
 ![FLUX](https://img.shields.io/badge/FLUX-static_outfits-ff69b4?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-public_demo-8A2BE2?style=for-the-badge)
 
-Comfyday checks the weather for a ZIP/place, interprets the conditions, maps that weather to a pre-generated FLUX outfit image, and renders one fixed model responsively.
-
-```text
-weather now + hours ahead
-        ↓
-temperature / feels-like / rain / fog / wind
-        ↓
-outfit preset key
-        ↓
-static FLUX image
-```
+Comfyday checks the weather for a 5-digit ZIP code, interprets the weather, maps it to a pre-generated FLUX outfit image, and renders one fixed model responsively. Only 5-digit ZIP input is supported in the shipped app.
 
 ## ✨ What It Does
 
 | Feature                        | Why It Matters                                                           |
 | ------------------------------ | ------------------------------------------------------------------------ |
 | 🌦️ Weather-aware outfits        | Uses current/forecast weather instead of a fixed outfit.                 |
-| 📍 ZIP/place search             | Try a ZIP, neighborhood, or city and check weather up to 24 hours ahead. |
+| 📍 ZIP code input               | Enter a 5-digit ZIP and check weather up to 24 hours ahead.              |
+| 🌍 Country-aware ZIP tie-breaks | Ambiguous postal codes can prefer the request country from deployment headers. |
 | 🧊 Tight SF-style temp buckets  | Most logic is tuned around the common `50s-70s°F` range.                 |
 | 💨 Provider-based wind/fog/rain | No fake weather guesses; provider data drives outfit changes.            |
 | 🖼️ Static generated looks       | Runtime is fast because it only selects pre-rendered images.             |
@@ -38,67 +29,40 @@ static FLUX image
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="docs/app-screenshot.png" alt="Comfyday cool weather outfit screenshot" width="360">
+  <img src="docs/app-screenshot.png" alt="Comfyday cool weather outfit screenshot" width="347">
   <img src="docs/app-screenshot-warm.png" alt="Comfyday warm weather outfit screenshot" width="360">
 </p>
 
 This public repo excludes the full private generated outfit library. These screenshots show the product experience with static weather-matched outfit renders.
 
-## 🧠 Architecture
+## 🧃 Recreate This Website And Show Off Your Outfits
+_**or stop reminding your kid to wear a jacket**_
 
-| Layer                  | Files                                | Job                                                                 |
-| ---------------------- | ------------------------------------ | ------------------------------------------------------------------- |
-| Backend                | `main.py`                            | FastAPI routes, Jinja shell, static file serving                    |
-| Weather                | `weather_service.py`                 | Tomorrow.io first, Weatherstack fallback, geocoding, cache fallback |
-| Provider normalization | `weather_api.py`                     | Tomorrow.io / Weatherstack → one `WeatherSnapshot`                  |
-| Outfit selection       | `outfit_logic.py`                    | Temp bucket + rain/fog/wind → preset key                            |
-| Scene payload          | `scene_builder.py`                   | One static image URL + compact weather text                         |
-| Browser UI             | `static/app.js`, `static/styles.css` | Fetch scene JSON and render responsively                            |
-| Generation ops         | `scripts/run_replicate.py`           | Optional offline reruns for bad FLUX outputs                        |
-
-```text
-main.py
-  FastAPI routes + static frontend
-
-weather_service.py
-  geocoding, provider selection, caching
-
-weather_api.py
-  Tomorrow.io / Weatherstack normalization
-
-outfit_logic.py
-  weather → preset key
-
-scene_builder.py
-  final scene payload for the browser
-
-static/app.js + static/styles.css
-  tiny frontend renderer
+1. Open Terminal.
+2. Get the code:
+```bash
+git clone https://github.com/YOUR_USERNAME/comfyday.git
+cd comfyday
 ```
-
-## 🔁 Runtime Flow
-
-```text
-ZIP/place + hours ahead
-  -> weather_service.py
-  -> weather_api.py provider normalization
-  -> outfit_logic.py preset selection
-  -> scene_builder.py one-image scene
-  -> frontend renders /static/generated/flux2/<preset>.png
+3. Install the app:
+`uv sync`
+4. Get weather API keys:
+- Make a Tomorrow.io account and copy an API key.
+- Optional fallback: make a Weatherstack account and copy an API key.
+5. Create `.env` file in codebase:
+```bash
+TOMORROW_API_KEY=your_key_here
+WEATHERSTACK_API_KEY=your_optional_key_here
+WEATHER_QUERY=94110
 ```
-
-The live app does **not** run image generation, virtual try-on, or clothing compositing at request time.
-
-## 🌦️ Weather Inputs
-
-| Signal                              | Used For                                    |
-| ----------------------------------- | ------------------------------------------- |
-| `temperature`                       | display temperature                         |
-| `temperatureApparent` / feels-like  | outfit bucket selection                     |
-| precipitation intensity/probability | drizzle/rain/storm routing                  |
-| weather code + description          | fog, cloud, rain, snow labels               |
-| wind speed/gust                     | breezy/windy labels + wind-specific outfits |
-| local forecast hour                 | “right now” vs “N hours from now” display   |
+6. Run it:
+`uv run fastapi dev main.py`
+7. Open: `http://localhost:8000`
+8. Optional image generation:
+- Go to [Replicate FLUX.2 Pro](https://replicate.com/black-forest-labs/flux-2-pro).
+- Create a Replicate API key
+- Add `COMFY_REPLICATE_API_KEY=...` to your new file `.env` in your codebase
+- Run `uv run --group generate python scripts/run_replicate.py`.
 
 ## 🚫 What This Public Demo Excludes
 
@@ -130,6 +94,74 @@ TOMORROW_API_KEY=...
 WEATHERSTACK_API_KEY=...
 ```
 
+## 🧠 Architecture
+
+| Layer                  | Files                                | Job                                                                 |
+| ---------------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| Backend                | `main.py`                            | FastAPI routes, Jinja shell, static file serving                    |
+| Weather                | `weather_service.py`                 | Tomorrow.io first, Weatherstack fallback, ZIP geocoding, cache fallback |
+| Provider normalization | `weather_api.py`                     | Tomorrow.io / Weatherstack → one `WeatherSnapshot`                  |
+| Outfit selection       | `outfit_logic.py`                    | Temp bucket + rain/fog/wind → preset key                            |
+| Scene payload          | `scene_builder.py`                   | One static image URL + compact weather text                         |
+| Browser UI             | `static/app.js`, `static/styles.css` | Fetch scene JSON and render responsively                            |
+| Generation ops         | `scripts/run_replicate.py`           | Optional offline reruns for bad FLUX outputs                        |
+
+```text
+main.py
+  FastAPI routes + static frontend
+
+weather_service.py
+  ZIP validation, postcode geocoding, provider selection, caching
+
+weather_api.py
+  Tomorrow.io / Weatherstack normalization
+
+outfit_logic.py
+  weather → preset key
+
+scene_builder.py
+  final scene payload for the browser
+
+static/app.js + static/styles.css
+  tiny frontend renderer
+```
+
+## 🔁 Runtime Flow
+
+```text
+ZIP code + hours ahead
+  -> weather_service.py
+  -> weather_api.py provider normalization
+  -> outfit_logic.py preset selection
+  -> scene_builder.py one-image scene
+  -> frontend renders /static/generated/flux2/<preset>.png
+```
+
+The live app does **not** run image generation, virtual try-on, or clothing compositing at request time.
+
+## 🌦️ Weather Inputs
+
+| Signal                              | Used For                                    |
+| ----------------------------------- | ------------------------------------------- |
+| `temperature`                       | display temperature                         |
+| `temperatureApparent` / feels-like  | outfit bucket selection                     |
+| precipitation intensity/probability | wet vs dry outfit routing                   |
+| weather code + description          | fog, cloud, rain, snow labels               |
+| wind speed/gust                     | breezy/windy labels + wind-specific outfits |
+| local forecast hour                 | “right now” vs “N hours from now” display   |
+| request-country header              | breaks postal-code ties like `10115` US vs DE |
+
+## 🌁 SF Outfit Logic
+
+San Francisco usually lives in the `52-72°F` band, with `63°F` as the classic “bring a layer” center. Comfyday uses provider truth first, then chooses a generated outfit:
+
+1. Blend real temp and feels-like temp.
+2. Adjust for real provider signals: sun, clouds, fog, rain, and wind.
+3. Pick a dry outfit from temp buckets that are tightest around `62-64°F`.
+4. If rain/snow/active precip is present, route to a wet-safe outfit by temp.
+
+The app does not invent fake fog, wind, or rain from vibes. If the provider does not report it, it does not force that condition.
+
 ## 🧪 Tests
 
 ```bash
@@ -142,9 +174,18 @@ Private-repo tests cover:
 - API payload contracts
 - provider normalization
 - no-network weather edge cases
+- fixture-backed integration replays for SF and Mexico City
 - preset reachability
 - generated-image coverage
 - FLUX rerun-script safety
+
+Record live integration fixtures once:
+
+```bash
+COMFY_RECORD_INTEGRATION=1 PYTHONPATH=. uv run pytest -q tests/test_integration_weather.py -s
+```
+
+After that, the same integration tests replay from `tests/fixtures/integration/` without live network calls.
 
 Note: image-coverage tests expect private generated images. For the public repo, either add safe placeholder images or skip those private-asset checks.
 

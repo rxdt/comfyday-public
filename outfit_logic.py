@@ -8,80 +8,78 @@ from backend_models import LocationRecord, OutfitWeatherContext, WeatherSnapshot
 
 
 SF_ZIP_TO_HOOD: dict[str, tuple[str, str]] = {
-    "94102": ("Hayes Valley / Tenderloin, San Francisco", "mixed_microclimate"),
-    "94103": ("SOMA, San Francisco", "sunbelt"),
-    "94107": ("Potrero Hill / Dogpatch, San Francisco", "sunbelt"),
-    "94109": ("Nob Hill / Russian Hill, San Francisco", "mixed_microclimate"),
+    "94102": ("Tenderloin, Hayes Valley, North of Market, San Francisco", "microclimate_mix"),
+    "94103": ("South of Market (SoMa), San Francisco", "sunbelt"),
+    "94104": ("Financial District, San Francisco", "microclimate_mix"),
+    "94105": ("Mission Bay, San Francisco", "sunbelt"),
+    "94107": ("Potrero / Mission Bay, San Francisco", "sunbelt"),
+    "94108": ("Chinatown, Nob Hill, San Francisco", "microclimate_mix"),
+    "94109": ("Polk, Russian / Nob Hill, San Francisco", "microclimate_mix"),
     "94110": ("Mission District, San Francisco", "sunbelt"),
-    "94112": ("Outer Mission / Ingleside, San Francisco", "mixed_microclimate"),
+    "94111": ("Embarcadero / FiDi, San Francisco", "microclimate_mix"),
+    "94112": ("Ingleside-Excelsior, San Francisco", "microclimate_mix"),
+    "94113": ("Glen Park, San Francisco", "sunbelt"),
     "94114": ("Castro / Noe Valley, San Francisco", "sunbelt"),
-    "94115": ("NoPa / Pacific Heights, San Francisco", "mixed_microclimate"),
-    "94116": ("Parkside / Outer Sunset, San Francisco", "coastal"),
-    "94117": ("Haight-Ashbury / Cole Valley, San Francisco", "mixed_microclimate"),
-    "94118": ("Richmond District, San Francisco", "coastal"),
+    "94115": ("Japantown / Pacific Heights, San Francisco", "microclimate_mix"),
+    "94116": ("Outer Sunset, San Francisco", "coastal"),
+    "94117": ("Haight-Ashbury, San Francisco", "microclimate_mix"),
+    "94118": ("Inner Richmond, San Francisco", "coastal"),
     "94121": ("Outer Richmond, San Francisco", "coastal"),
-    "94122": ("Sunset District, San Francisco", "coastal"),
-    "94123": ("Marina District, San Francisco", "mixed_microclimate"),
-    "94124": ("Bayview, San Francisco", "sunbelt"),
-    "94127": ("West Portal / St. Francis Wood, San Francisco", "mixed_microclimate"),
-    "94131": ("Noe Valley / Glen Park, San Francisco", "sunbelt"),
-    "94133": ("North Beach / Telegraph Hill, San Francisco", "mixed_microclimate"),
+    "94122": ("Inner Sunset, San Francisco", "coastal"),
+    "94123": ("Marina / Cow Hollow, San Francisco", "microclimate_mix"),
+    "94124": ("Bayview-Hunters Point, San Francisco", "sunbelt"),
+    "94127": ("St. Francis Wood / West Portal, San Francisco", "microclimate_mix"),
+    "94129": ("Presidio, San Francisco", "coastal"),
+    "94130": ("Treasure Island, San Francisco", "microclimate_mix"),
+    "94131": ("Twin Peaks, San Francisco", "sunbelt"),
+    "94132": ("Lake Merced, San Francisco", "coastal"),
+    "94133": ("North Beach / Chinatown, San Francisco", "microclimate_mix"),
     "94134": ("Visitacion Valley, San Francisco", "sunbelt"),
-    "sunset": ("Sunset District, San Francisco", "coastal"),
-    "richmond": ("Richmond District, San Francisco", "coastal"),
-    "outer sunset": ("Outer Sunset, San Francisco", "coastal"),
-    "inner sunset": ("Inner Sunset, San Francisco", "coastal"),
-    "outer richmond": ("Outer Richmond, San Francisco", "coastal"),
-    "inner richmond": ("Inner Richmond, San Francisco", "coastal"),
-    "presidio": ("Presidio, San Francisco", "coastal"),
-    "marina": ("Marina District, San Francisco", "mixed_microclimate"),
-    "cow hollow": ("Cow Hollow, San Francisco", "mixed_microclimate"),
-    "haight": ("Haight-Ashbury, San Francisco", "mixed_microclimate"),
-    "lower haight": ("Lower Haight, San Francisco", "mixed_microclimate"),
-    "nopa": ("NoPa, San Francisco", "mixed_microclimate"),
-    "pac heights": ("Pacific Heights, San Francisco", "mixed_microclimate"),
-    "mission": ("Mission District, San Francisco", "sunbelt"),
-    "mission district": ("Mission District, San Francisco", "sunbelt"),
-    "mission bay": ("Mission Bay, San Francisco", "sunbelt"),
-    "outer mission": ("Outer Mission, San Francisco", "sunbelt"),
-    "soma": ("SOMA, San Francisco", "sunbelt"),
-    "dogpatch": ("Dogpatch, San Francisco", "sunbelt"),
-    "potrero": ("Potrero Hill, San Francisco", "sunbelt"),
-    "noe valley": ("Noe Valley, San Francisco", "sunbelt"),
-    "fidi": ("Financial District, San Francisco", "sunbelt"),
+    "94143": ("UC San Francisco, San Francisco", "microclimate_mix"),
+    "94158": ("Mission Bay, San Francisco", "sunbelt"),
 }
 SF_TIMEZONE = ZoneInfo("America/Los_Angeles")
 
-# SF outfit selection is intentionally densest around normal local weather:
-# 52-72F is the common usable band, 52-74F is a practical annual average span,
-# and 63F is the canonical "bring a layer" center. Buckets are narrowest around
-# that center, then expand toward rare cold/hot tails. Provider truth still wins:
-# feels-like temp chooses the bucket, while actual rain, precip chance, fog, wind,
-# snow, and description/weather-code conditions route to safer generated outfits.
 TEMPERATURE_BUCKETS = (
-    ("very_cold", float("-inf"), 48),
-    ("cold", 48, 50),
-    ("around_50", 50, 51),
-    ("temp_51_to_52", 51, 52),
-    ("temp_52_to_53", 52, 53),
-    ("temp_53_to_54", 53, 54),
-    ("temp_54_to_55", 54, 55),
-    ("temp_55_to_56", 55, 56),
-    ("temp_56_to_57", 56, 57),
-    ("upper_50s", 57, 59),
-    ("low_60s", 59, 61),
-    ("early_60s", 61, 62),
-    ("low_mid_60s", 62, 64),
-    ("mid_60s", 64, 65),
-    ("upper_60s", 65, 67),
-    ("near_70", 67, 69),
-    ("low_70s", 69, 71),
-    ("warm_low_70s", 71, 73),
-    ("warm_mid_70s", 73, 76),
-    ("hot", 76, 80),
-    ("very_hot", 80, float("inf")),
+    ("0_to_48", float("-inf"), 48, "0_to_48_dry_very_cold"),  # cold tail
+    ("48_to_50", 48, 50, "48_to_50_dry_cold"),  # 2F
+    ("50_to_51", 50, 51, "50_to_51_dry_cold_layer"),  # 1F
+    ("51_to_52", 51, 52, "50_to_52_dry_very_cold"),  # 1F
+    ("52_to_53", 52, 53, "51_to_53_dry_cold_layer"),  # 1F
+    ("53_to_54", 53, 54, "53_to_55_dry_cool_layer"),  # 1F
+    ("54_to_55", 54, 55, "54_to_55_dry_layered"),  # 1F
+    ("55_to_56", 55, 56, "55_to_57_dry_black_layer"),  # 1F
+    ("56_to_57", 56, 57, "56_to_57_dry_chunky_cardigan"),  # 1F
+    ("57_to_57_5", 57, 57.5, "57_to_57_5_dry_cool_layer"),  # 0.5F
+    ("57_5_to_58", 57.5, 58, "57_to_59_dry_cool_layer"),  # 0.5F
+    ("58_to_59", 58, 59, "59_to_61_dry_sweatsuit_layer"),  # 1F
+    ("59_to_60", 59, 60, "59_to_61_dry_sweatsuit_layer"),  # 1F
+    ("60_to_60_5", 60, 60.5, "60_to_61_dry_layered_beanie"),  # 0.5F
+    ("60_5_to_61", 60.5, 61, "61_to_62_dry_light_layer"),  # 0.5F
+    ("61_to_61_5", 61, 61.5, "62_to_62_5_dry_mild_layer"),  # 0.5F
+    ("61_5_to_62", 61.5, 62, "62_5_to_63_dry_light_layer"),  # 0.5F
+    ("62_to_62_5", 62, 62.5, "62_to_64_dry_cardigan"),  # 0.5F
+    ("62_5_to_63", 62.5, 63, "63_to_63_5_dry_jacket_uggs"),  # 0.5F
+    ("63_to_63_5", 63, 63.5, "64_to_65_dry_light_layer"),  # 0.5F
+    ("63_5_to_64", 63.5, 64, "65_to_66_dry_light_layer"),  # 0.5F
+    ("64_to_64_5", 64, 64.5, "66_to_67_dry_mild_layer"),  # 0.5F
+    ("64_5_to_65", 64.5, 65, "67_to_67_5_dry_zip_hoodie"),  # 0.5F
+    ("65_to_65_5", 65, 65.5, "67_to_68_dry_warm_light"),  # 0.5F
+    ("65_5_to_66", 65.5, 66, "67_to_69_dry_warm_light"),  # 0.5F
+    ("66_to_67", 66, 67, "66_to_67_dry_mild_layer"),  # 1F
+    ("67_to_68", 67, 68, "67_to_67_5_dry_zip_hoodie"),  # 1F
+    ("68_to_69", 68, 69, "67_to_68_dry_warm_light"),  # 1F
+    ("69_to_70", 69, 70, "69_to_71_dry_warm_light"),  # 1F
+    ("70_to_71", 70, 71, "71_to_73_dry_warm"),  # 1F
+    ("71_to_72", 71, 72, "72_5_to_73_dry_warm_clear"),  # 1F
+    ("72_to_73", 72, 73, "73_to_75_dry_warm_clear"),  # 1F
+    ("73_to_74", 73, 74, "74_5_to_76_dry_warm_clear"),  # 1F
+    ("74_to_75", 74, 75, "75_to_78_dry_hot"),  # 1F
+    ("75_to_77", 75, 77, "75_to_78_dry_hot"),  # 2F
+    ("77_to_80", 77, 80, "78_to_80_dry_hot"),  # 3F
+    ("80_to_85", 80, 85, "80_to_85_dry_very_hot"),  # 5F
+    ("85_plus", 85, float("inf"), "85_plus_dry_very_hot"),  # hot tail
 )
-RAIN_LEVELS = (("none", 0.0, 0.0), ("drizzle", 0.0, 0.03), ("rain", 0.03, 0.15), ("storm", 0.15, float("inf")))
 RAW_DESCRIPTION_TO_DERIVED_CONDITION = {
     "fog": ("fog", "mist", "marine layer"),
     "wind": ("wind", "gust", "breez"),
@@ -105,163 +103,91 @@ WEATHER_CODE_TO_DERIVED_CONDITION = {
     8000: "wet",
 }
 BUCKET_NOTES = {
-    "very_cold": "Very cold; use the warmest outfit you have",
-    "cold": "Cold; don't forget to layer up",
-    "around_50": "Around 50; use a real cold-weather layer",
-    "temp_51_to_52": "Low 50s; use a real layer",
-    "temp_52_to_53": "Low 50s; use a real layer",
-    "temp_53_to_54": "Low 50s; use a real layer",
-    "temp_54_to_55": "Mid-50s; dress like cool weather with a backup layer",
-    "temp_55_to_56": "Mid-50s; dress like cool weather with a backup layer",
-    "temp_56_to_57": "High 50s; a backup layer still helps",
-    "upper_50s": "Upper 50s; a hoodie, cardigan, or light jacket is the safe default",
-    "low_60s": "Low 60s; keep a light jacket or cardigan on",
-    "early_60s": "Low 60s; light layers still work best",
-    "low_mid_60s": "Low-mid 60s; a very light cardigan works.",
-    "mid_60s": "Mid-60s; use a real light layer",
-    "upper_60s": "Upper 60s; use a removable light layer",
-    "near_70": "Near 70; short sleeves can work, but keep SF shifts in mind",
-    "low_70s": "Low 70s; lighter clothing works unless fog, rain, or wind happens soon.",
-    "warm_low_70s": "Low 70s; lighter clothing works unless fog, rain, or wind happens soon.",
-    "warm_mid_70s": "Mid-70s; dress light",
-    "hot": "Hot; use the lightest warm-weather outfit.",
-    "very_hot": "Very hot; prioritize breathable clothing and water.",
+    "0_to_48": "Full winter clothing.",
+    "48_to_50": "Keep outerwear on.",
+    "50_to_51": "Cold enough for real layers.",
+    "51_to_52": "Cold enough for real layers.",
+    "52_to_53": "Still chilly; keep layers on.",
+    "53_to_54": "Layer like it will still feel chilly.",
+    "54_to_55": "A base layer plus outerwear works best.",
+    "55_to_56": "Light jacket weather.",
+    "56_to_57": "A chunkier layer makes sense.",
+    "57_to_57_5": "Use a layer you can keep on.",
+    "57_5_to_58": "Don't forget to bring a layer.",
+    "58_to_59": "A hoodie, jacket, or sweatshirt works.",
+    "59_to_60": "Hoodie, cardigan, or light jacket range.",
+    "60_to_60_5": "Layered beanie weather.",
+    "60_5_to_61": "Bringing a light layer makes sense.",
+    "61_to_61_5": "A lighter layered look works.",
+    "61_5_to_62": "Classic SF layering weather.",
+    "62_to_62_5": "Cardigan or sweater default.",
+    "62_5_to_63": "A jacket can still make sense.",
+    "63_to_63_5": "A light layer is enough.",
+    "63_5_to_64": "Lighter layering works.",
+    "64_to_64_5": "Comfortable with a warm layer.",
+    "64_5_to_65": "A light outer layer could work.",
+    "65_to_65_5": "You can dress lighter.",
+    "65_5_to_66": "Warm-leaning but not summer-hot.",
+    "66_to_67": "Lighter clothing, but not summer-hot.",
+    "67_to_68": "Warm enough for less clothing.",
+    "68_to_69": "Short sleeves could work.",
+    "69_to_70": "Warm enough to dress like it.",
+    "70_to_71": "A warm-weather outfit works.",
+    "71_to_72": "Warm-weather simplicity now.",
+    "72_to_73": "Dress for the warm weather.",
+    "73_to_74": "It's warm enough to dress skimpy.",
+    "74_to_75": "A hotter-weather outfit works.",
+    "75_to_77": "Hot by SF standards.",
+    "77_to_80": "Hot enough for your lightest outfit.",
+    "80_to_85": "Prioritize breathable clothing and water.",
+    "85_plus": "Heat-first outfit, no extra layers.",
 }
 
 
 def selected_weather_preset_key(context: OutfitWeatherContext) -> str:
-    """Map interpreted weather signals to one generated outfit image key."""
-    bucket = context.bucket
-    rain_level = context.rain_level
-    conditions = context.derived_conditions
+    """Map adjusted weather signals to one generated outfit image key."""
     temp = context.effective_temp_f
+    actual_wet = context.rain_level != "none"
+    is_wet = actual_wet or "wet" in context.derived_conditions
 
-    if rain_level == "storm":
-        if bucket == "very_cold" and conditions & {"snow", "wind", "fog"}:
-            return "very_cold_weather_and_wet_snow_or_windstorm"
-        return "cold_weather_and_wet_rainstorm" if bucket == "very_cold" else "cold_weather_and_wet_storming"
-    if rain_level == "rain":
-        if bucket in {
-            "very_cold",
-            "cold",
-            "around_50",
-            "temp_51_to_52",
-            "temp_52_to_53",
-            "temp_53_to_54",
-            "temp_54_to_55",
-            "temp_55_to_56",
-            "temp_56_to_57",
-        }:
-            return "cold_weather_and_wet_raining"
-        if bucket in {"upper_50s", "low_60s"}:
-            return "cool_weather_and_wet_raining"
-        return (
-            "warm_weather_and_wet_raining"
-            if bucket in {"low_70s", "warm_low_70s", "warm_mid_70s", "hot", "very_hot"}
-            else "mild_weather_and_wet_raining"
-        )
-    if rain_level == "drizzle":
-        return (
-            "cool_weather_and_wet_windy_drizzle"
-            if bucket
-            in {
-                "very_cold",
-                "cold",
-                "around_50",
-                "temp_51_to_52",
-                "temp_52_to_53",
-                "temp_53_to_54",
-                "temp_54_to_55",
-                "temp_55_to_56",
-                "temp_56_to_57",
-                "upper_50s",
-                "low_60s",
-            }
-            else "mild_weather_and_wet_drizzling"
-        )
-    if bucket == "very_hot":
-        return "very_hot_weather_near_the_coast_or_bay" if temp < 85 else "very_hot_weather_in_a_warm_neighborhood"
-    if bucket == "hot":
-        return "hot_weather_near_the_coast_or_bay" if temp < 78 else "hot_weather_in_a_warm_neighborhood"
-    if bucket == "warm_mid_70s":
-        return (
-            "warm_clear_light_weather_near_the_bay"
-            if temp < 74.5
-            else "warm_clear_light_weather_in_a_warm_neighborhood"
-        )
-    if bucket == "warm_low_70s":
-        if conditions & {"fog", "wind"}:
-            return "warm_weather_near_the_bay"
-        if temp >= 72.5:
-            return "warm_clear_weather_in_a_warm_neighborhood"
-        return "warm_weather_in_a_warm_neighborhood"
-    if bucket == "low_70s":
-        if conditions & {"fog", "wind"}:
-            return "warm_weather_near_the_bay"
-        if temp < 70:
-            return "mild_weather_near_the_bay_with_wind_condition"
-        if temp < 70.5:
-            return "warm_clear_weather_near_the_bay"
-        if temp < 71:
-            return "warm_clear_weather_near_the_coast"
-        return "warm_weather_in_a_warm_neighborhood"
-    if bucket == "near_70":
-        if conditions & {"fog", "wind"}:
-            return "warm_light_weather_near_the_bay"
-        if temp < 68:
-            return "warm_light_weather_near_the_coast"
-        return "warm_light_weather_in_a_warm_neighborhood"
-    if bucket == "upper_60s":
-        if "wind" in conditions or "fog" in conditions:
-            return "mild_weather_near_the_coast_with_wind_condition"
-        return "mild_weather_in_a_warm_neighborhood"
-    if bucket == "mid_60s":
-        if "fog" in conditions:
-            return "mild_weather_near_the_coast_with_fog_condition"
-        if "wind" in conditions:
-            return "mild_weather_near_the_coast_with_wind_condition"
-        return "mild_weather_near_the_bay"
-    if bucket == "low_mid_60s":
-        if "fog" in conditions:
-            return "mild_weather_near_the_coast_with_fog_condition"
-        if "wind" in conditions:
-            return "mild_weather_near_the_coast_with_wind_condition"
-        return "early_60s_weather_and_dry"
-    if bucket == "early_60s":
-        if "fog" in conditions:
-            return "mild_weather_near_the_coast_with_fog_condition"
-        if "wind" in conditions:
-            return "mild_weather_near_the_coast_with_wind_condition"
-        return "mild_weather_in_a_warm_neighborhood"
-    if bucket == "low_60s":
-        return (
-            "cool_weather_with_fog_or_wind_condition"
-            if conditions & {"fog", "wind"}
-            else "cool_weather_near_the_bay_or_coast"
-        )
-    if bucket in {"temp_54_to_55", "temp_55_to_56", "temp_56_to_57"}:
-        return "cold_weather_with_wind_condition" if conditions & {"fog", "wind"} else "54_to_56_degree_weather_and_dry"
-    if bucket == "upper_50s":
-        return (
-            "cool_weather_with_fog_or_wind_condition"
-            if conditions & {"fog", "wind"}
-            else "cool_weather_near_the_bay_or_coast"
-        )
-    if bucket in {"cold", "around_50", "temp_51_to_52", "temp_52_to_53", "temp_53_to_54"}:
-        if conditions & {"fog", "wind"}:
+    if is_wet:
+        if temp < 48:
             return (
-                "50_to_51_degree_weather_with_wind_condition" if 50 <= temp < 51 else "cold_weather_with_wind_condition"
+                "0_to_48_snow_or_windstorm"
+                if actual_wet and {"snow", "wind"} & context.derived_conditions
+                else ("0_to_48_rainstorm" if actual_wet else "0_to_48_dry_very_cold")
             )
-        if "wet" in conditions and 50 <= temp < 50.5:
-            return "50_to_51_degree_weather_dry_high_precipitation"
-        if 50 <= temp < 51:
-            return "cold_weather_with_wind_condition"
+        if actual_wet:
+            if temp < 52:
+                return "48_to_52_storming"
+            if temp < 57:
+                return "52_to_57_raining_cold"
+            if temp < 61:
+                return "57_to_61_raining_cool"
+            if temp < 69:
+                return "61_to_69_raining_mild"
+            return "69_to_80_raining_warm"
+        if temp < 50:
+            return "48_to_50_dry_cold"
         if temp < 51:
-            return "cold_weather_and_dry"
-        if 51 <= temp < 54:
-            return "51_to_54_degree_weather_and_dry"
-        return "cold_weather_and_dry"
-    return "very_cold_weather_with_wind_condition" if conditions & {"fog", "wind"} else "very_cold_weather_and_dry"
+            return "50_to_51_dry_high_precip"
+        if temp < 53:
+            return "51_to_53_dry_cold_layer"
+        if temp < 56:
+            return "55_to_56_dry_possible_rain_umbrella"
+        if temp < 61:
+            return "52_to_61_cool_wet_or_dry_layer"
+        if temp < 69:
+            return "61_to_71_drizzle_mild"
+        if temp < 69.5:
+            return "69_to_69_5_dry_warm_layer"
+        if temp < 70.5:
+            return "70_to_70_5_dry_warm_clear"
+        if temp < 71:
+            return "70_5_to_71_dry_warm_clear"
+        return "69_to_80_raining_warm"
+
+    return next(key for _bucket, low, high, key in TEMPERATURE_BUCKETS if low <= temp < high)
 
 
 def get_outfit(
@@ -276,9 +202,8 @@ def get_outfit(
 
 
 def display_location_name(fallback_name: str, query: str) -> str:
-    """Return a concise SF display name from known ZIP/neighborhood aliases."""
-    haystack = " ".join(f"{query} {fallback_name}".strip().split()).casefold()
-    return next((label for alias, (label, _zone) in SF_ZIP_TO_HOOD.items() if alias in haystack), fallback_name)
+    """Return a concise SF display name from a known ZIP code."""
+    return SF_ZIP_TO_HOOD.get(query.strip(), (fallback_name, ""))[0]
 
 
 def interpret_weather_for_messaging_and_outfit_selection(
@@ -298,37 +223,47 @@ def interpret_weather_for_messaging_and_outfit_selection(
     ):
         derived_conditions.add("wind")
 
-    rain_level = (
-        "storm"
-        if snapshot.snow
-        else next(
-            level
-            for level, low, high in RAIN_LEVELS
-            if (snapshot.precip_in <= 0 and level == "none") or low < snapshot.precip_in <= high
-        )
-    )
+    rain_level = "wet" if snapshot.snow or snapshot.precip_in > 0 else "none"
     if rain_level != "none":
         derived_conditions.add("wet")
 
     local_dt = snapshot.observed_at.astimezone(SF_TIMEZONE)
 
-    normalized_query = " ".join(query.strip().split()).casefold()
-    derived_microclimate_zone = next(
-        (zone for alias, (_label, zone) in SF_ZIP_TO_HOOD.items() if alias in normalized_query), None
-    )
-
-    # Prefer provider apparent temperature when present; display still uses actual temperature.
-    effective_temp_f = snapshot.feels_like_f if snapshot.feels_like_f is not None else snapshot.temperature_f
+    derived_microclimate_zone = SF_ZIP_TO_HOOD.get(query.strip(), ("", None))[1]
 
     if snapshot.precip_probability_pct >= 35 and rain_level == "none":
         derived_conditions.add("wet")
 
-    bucket = next(label for label, low, high in TEMPERATURE_BUCKETS if low <= effective_temp_f < high)
+    feels_like_f = snapshot.feels_like_f if snapshot.feels_like_f is not None else snapshot.temperature_f
+    effective_temp_f = (snapshot.temperature_f * 0.6) + (feels_like_f * 0.4)
+    if (
+        8 <= local_dt.hour < 18
+        and "fog" not in derived_conditions
+        and ("sun" in lowered or snapshot.weather_code == 1000)
+    ):
+        effective_temp_f += 2
+    if "cloud" in derived_conditions:
+        effective_temp_f -= 1
+    if "fog" in derived_conditions:
+        effective_temp_f -= 2
+    if rain_level != "none":
+        effective_temp_f -= 3
+    if derived_microclimate_zone == "coastal":
+        effective_temp_f -= 2
+    elif derived_microclimate_zone == "sunbelt":
+        effective_temp_f += 1
+    wind_mph = max(snapshot.wind_speed_mph or 0, snapshot.wind_gust_mph or 0)
+    if 10 <= wind_mph < 18:
+        effective_temp_f -= 2
+    elif 18 <= wind_mph < 28:
+        effective_temp_f -= 4
+    elif wind_mph >= 28:
+        effective_temp_f -= 7
+
+    bucket = next(label for label, low, high, _key in TEMPERATURE_BUCKETS if low <= effective_temp_f < high)
     note_parts = [BUCKET_NOTES[bucket]]
-    if rain_level == "drizzle":
-        note_parts.append("Drizzle counts as wet; keep rain-safe shoes or an umbrella.")
-    elif rain_level in {"rain", "storm"}:
-        note_parts.append("It's raining, use water-safe shoes and an umbrella.")
+    if rain_level != "none":
+        note_parts.append("It's wet; use water-safe shoes and an umbrella.")
     elif "wet" in derived_conditions:
         note_parts.append("Rain possible; keep a folded umbrella handy.")
     if "fog" in derived_conditions:

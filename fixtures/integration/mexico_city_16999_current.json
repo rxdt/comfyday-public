@@ -1,0 +1,32 @@
+{
+  "resolved_location": {
+    "query": "16999",
+    "display_name": "Mexico City, Mexico",
+    "latitude": 19.4326296,
+    "longitude": -99.1331785,
+    "timezone": null,
+    "country": null,
+    "country_code": "MX",
+    "admin1": null,
+    "admin2": null,
+    "geocoder": "nominatim-search-v1",
+    "tomorrow_location": "19.4326296,-99.1331785"
+  },
+  "current": {
+    "query": "16999",
+    "location_name": "Mexico City, Mexico",
+    "temperature_f": 65.19,
+    "precip_probability_pct": 0,
+    "description": "Cloudy",
+    "precip_in": 0.0,
+    "weather_code": 1001,
+    "snow": false,
+    "night": false,
+    "observed_at": "2026-05-09T06:59:00+00:00",
+    "source": "tomorrow-realtime",
+    "feels_like_f": 65.2,
+    "wind_speed_mph": 1.2,
+    "wind_gust_mph": 6.0
+  },
+  "hourly": []
+}

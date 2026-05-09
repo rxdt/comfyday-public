@@ -17,7 +17,7 @@ class WeatherServiceTests(unittest.IsolatedAsyncioTestCase):
         self.service = WeatherSceneService()
         self.location = LocationRecord(
             query="94110",
-            display_name="Inner Mission, Bernal Heights, San Francisco",
+            display_name="Mission District, San Francisco",
             latitude=37.7599,
             longitude=-122.4148,
             timezone="America/Los_Angeles",
@@ -30,7 +30,7 @@ class WeatherServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.snapshot = WeatherSnapshot(
             query="94110",
-            location_name="Inner Mission, Bernal Heights, San Francisco",
+            location_name="Mission District, San Francisco",
             temperature_f=58,
             precip_probability_pct=0,
             description="Mostly clear",
@@ -92,7 +92,7 @@ class WeatherServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(scene, SceneState)
         self.assertTrue(scene.stale)
         self.assertTrue(scene.source.endswith("-cache"))
-        self.assertEqual(scene.location_name, "Inner Mission, Bernal Heights, San Francisco")
+        self.assertEqual(scene.location_name, "Mission District, San Francisco")
 
     async def test_get_scene_raises_when_providers_fail_without_cache(self) -> None:
         """Provider failure without cache should not return fake demo weather."""
