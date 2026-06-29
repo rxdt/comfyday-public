@@ -38,7 +38,7 @@ body {
   position: relative;
   width: min(92vw, 516px);
   height: clamp(600px, 77svh, 816px);
-  margin: 8px auto 4px;
+  margin: 0 auto 0;
   overflow: hidden;
   background: #ffffff;
 }
@@ -82,7 +82,7 @@ body {
 
 .weather-block {
   text-align: center;
-  margin-bottom: 5px;
+  margin-bottom: 0px;
 }
 
 .weather-title,
@@ -90,13 +90,13 @@ body {
 .weather-subcopy,
 .weather-outfit-note,
 .status-line {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
 }
 
 .weather-title,
 .weather-info,
 .weather-outfit-note {
-  line-height: 1.1;
+  line-height: 1;
 }
 
 .weather-title {
@@ -108,8 +108,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  margin-bottom: 0;
+  gap: -1px;
+  margin-bottom: -1;
 }
 
 .weather-form-row {
@@ -128,7 +128,7 @@ body {
 .weather-form-row input[type="text"] {
   width: 72px;
   min-height: 28px;
-  padding: 0 8px;
+  padding: 0 1px;
   text-align: center;
   border: 1px solid var(--line);
   background: #ffffff;
@@ -137,12 +137,12 @@ body {
 }
 
 .weather-form-row input[type="text"] {
-  width: 150px;
+  width: 125px;
 }
 
 .weather-form-row button {
   min-height: 28px;
-  padding: 0 10px;
+  padding: 0 5px;
   border: 1px solid var(--line);
   background: #ffffff;
   color: var(--text);
@@ -169,6 +169,7 @@ body {
 }
 
 @media (max-width: 389px) {
+
   .weather-info,
   .weather-outfit-note {
     white-space: normal;
@@ -191,7 +192,7 @@ body {
 
 .github-link {
   position: absolute;
-  right: -34px;
+  right: -25px;
   bottom: 8px;
   z-index: 5;
   display: grid;
@@ -246,7 +247,7 @@ body {
   .weather-subcopy,
   .weather-outfit-note,
   .status-line {
-    margin-bottom: 3px;
+    margin-bottom: 1px;
   }
 }
 
@@ -264,7 +265,7 @@ body {
 
   .weather-form-row {
     font-size: 0.78rem;
-    gap: 4px;
+    gap: 2px;
   }
 
   .weather-form-row input[type="text"] {

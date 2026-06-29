@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Comfyday</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}?v={{ static_version }}" />
   </head>
   <body>
     <main class="page">
@@ -82,8 +82,8 @@
               name="query"
               type="text"
               maxlength="5"
-              value="94110"
-              placeholder="94110"
+              value="94122"
+              placeholder="94122"
               autocomplete="postal-code"
               inputmode="numeric"
               pattern="\d{5}"
@@ -98,6 +98,6 @@
       window.__INITIAL_SCENE__ = {{ initial_scene|safe }};
       window.__MAX_FORECAST_HOURS__ = {{ max_forecast_hours }};
     </script>
-    <script type="module" src="{{ url_for('static', path='app.js') }}"></script>
+    <script type="module" src="{{ url_for('static', path='app.js') }}?v={{ static_version }}"></script>
   </body>
 </html>

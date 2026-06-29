@@ -1,6 +1,6 @@
 const initialScene = window.__INITIAL_SCENE__;
 const maxForecastHours = window.__MAX_FORECAST_HOURS__ || 12;
-const defaultLocationQuery = "94110";
+const defaultLocationQuery = "94122";
 const zipCodePattern = /^\d{5}$/;
 
 const elements = {
@@ -126,16 +126,16 @@ function renderScene(scene) {
         ? "Current weather in"
         : `Forecast weather in ${scene.hours_ahead} hour${scene.hours_ahead === 1 ? "" : "s"} for`;
   }
-  const temperature = Number(scene.temperature_f).toFixed(0);
+  const temperature = Number(scene.temperature_f).toFixed(1);
   const feelsLike =
     scene.feels_like_f === undefined || scene.feels_like_f === null
       ? ""
-      : ` (feels like ${Number(scene.feels_like_f).toFixed(0)})`;
+      : ` (feels like ${Number(scene.feels_like_f).toFixed(1)})`;
   elements.temperature.textContent = `${temperature}${feelsLike}`;
   elements.rainChance.textContent = String(scene.precip_probability_pct);
   elements.description.textContent =
     scene.hours_ahead === 0
-      ? `${scene.description.toLowerCase()} right now`
+      ? `${scene.description.toLowerCase()}`
       : `${scene.description.toLowerCase()} ${scene.hours_ahead} hour${scene.hours_ahead === 1 ? "" : "s"} from now`;
   elements.windFragment.textContent = scene.wind_label ? ` · ${scene.wind_label}` : "";
   elements.outfitNote.textContent = scene.outfit_note || "";
