@@ -1,3 +1,11 @@
+
+
+https://github.com/user-attachments/assets/9e877391-e9eb-4a6b-9a14-85f6a9a10464
+
+
+
+https://github.com/user-attachments/assets/3569cfbf-7bab-47b1-952c-5ed838b03bcb
+
 # 🌈 Comfyday 🌦️
 
 **[TRY IT ON HERE](https://comfyday.vercel.app/)**
@@ -26,10 +34,10 @@ Comfyday checks the weather for a 5-digit ZIP code, interprets the weather, maps
 | 🖼️ Static generated looks            | Runtime is fast because it only selects pre-rendered images.                   |
 | 📱 Responsive frontend               | Built to fit the model + text on desktop and mobile.                           |
 
-## 📷 Screenshots 📸
+## 📷 Example 📸
 
 <p align="center">
-  <img src="static/generated/sample.mp4" alt="Comfyday example">
+  <img video="https://github.com/user-attachments/assets/c4bede33-a340-4e14-b805-354c72474eb8"> alt="Comfyday example">
 </p>
 
 ## 🐸 Kid and Parent Friendly Instructions
